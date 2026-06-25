@@ -90,7 +90,7 @@ static void Degrain_C16(uint8_t * MVU_RESTRICT pDst8, ptrdiff_t nDstPitch, const
 
 #ifdef MVTOOLS_X86
 #include <emmintrin.h>
-DenoiseFunction selectDegrainFunctionAVX2(unsigned radius, unsigned width, unsigned height, unsigned bits) noexcept;
+void selectDegrainFunctionAVX2(unsigned radius, unsigned width, unsigned height, unsigned bits, DenoiseFunction &degrain) noexcept;
 
 template <int radius, int blockWidth, int blockHeight>
 static void Degrain_sse2(uint8_t * MVU_RESTRICT pDst, ptrdiff_t nDstPitch, const uint8_t * MVU_RESTRICT pSrc, ptrdiff_t nSrcPitch, const uint8_t ** MVU_RESTRICT pRefs, const ptrdiff_t * MVU_RESTRICT nRefPitches, uint16_t WSrc, const uint16_t * MVU_RESTRICT WRefs) noexcept {

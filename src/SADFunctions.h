@@ -32,8 +32,9 @@ SADFunction selectSATDFunction(unsigned width, unsigned height, unsigned bits);
 
 
 #if defined(MVTOOLS_X86)
-SADFunction selectSADFunctionAVX2(unsigned width, unsigned height, unsigned bits);
-SADFunction selectSATDFunctionAVX2(unsigned width, unsigned height, unsigned bits);
-SADFunction selectSADFunctionAVX512(unsigned width, unsigned height, unsigned bits);
-SADFunction selectSATDFunctionAVX512(unsigned width, unsigned height, unsigned bits);
+// Higher-ISA selectors overwrite sad/satd only when a kernel exists for the given size.
+void selectSADFunctionAVX2(unsigned width, unsigned height, unsigned bits, SADFunction &sad);
+void selectSATDFunctionAVX2(unsigned width, unsigned height, unsigned bits, SADFunction &satd);
+void selectSADFunctionAVX512(unsigned width, unsigned height, unsigned bits, SADFunction &sad);
+void selectSATDFunctionAVX512(unsigned width, unsigned height, unsigned bits, SADFunction &satd);
 #endif

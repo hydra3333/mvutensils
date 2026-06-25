@@ -24,12 +24,4 @@ enum {
 
 uint32_t cpu_detect();
 
-enum {
-    MVOPT_SCALAR = 0,
-#ifdef MVTOOLS_X86
-    MVOPT_SSE2   = 1,
-    MVOPT_AVX2   = 2
-#endif // MVTOOLS_X86
-};
-
 extern uint32_t g_cpuinfo;

@@ -349,54 +349,29 @@ static const VSFrame *VS_CC degrainGetFrame(int n, int activationReason, void *i
 }
 
 
-// opt can fit in four bits, if the width and height need more than eight bits each.
-#define KEY(width, height, bits, opt) (unsigned)(width) << 24 | (height) << 16 | (bits) << 8 | (opt)
+#define KEY(width, height, bits) (unsigned)(width) << 24 | (height) << 16 | (bits) << 8
 
+// On x86 the 8-bit SSE2 kernel takes the scalar version's place directly in the map (no separate
+// map, no instruction-set key). 16-bit pixels have no SSE2 Degrain kernel so they stay scalar;
+// width-2 (DEGRAIN_C below) has no SSE2 kernel for either bit depth.
 #if defined(MVTOOLS_X86)
-#define DEGRAIN_SSE2(radius, width, height) \
-    { KEY(width, height, 8, MVOPT_SSE2), Degrain_sse2<radius, width, height> },
-
-#define DEGRAIN_LEVEL_SSE2(radius)\
-    {\
-        DEGRAIN_SSE2(radius, 4, 2)\
-        DEGRAIN_SSE2(radius, 4, 4)\
-        DEGRAIN_SSE2(radius, 4, 8)\
-        DEGRAIN_SSE2(radius, 8, 1)\
-        DEGRAIN_SSE2(radius, 8, 2)\
-        DEGRAIN_SSE2(radius, 8, 4)\
-        DEGRAIN_SSE2(radius, 8, 8)\
-        DEGRAIN_SSE2(radius, 8, 16)\
-        DEGRAIN_SSE2(radius, 16, 1)\
-        DEGRAIN_SSE2(radius, 16, 2)\
-        DEGRAIN_SSE2(radius, 16, 4)\
-        DEGRAIN_SSE2(radius, 16, 8)\
-        DEGRAIN_SSE2(radius, 16, 16)\
-        DEGRAIN_SSE2(radius, 16, 32)\
-        DEGRAIN_SSE2(radius, 32, 8)\
-        DEGRAIN_SSE2(radius, 32, 16)\
-        DEGRAIN_SSE2(radius, 32, 32)\
-        DEGRAIN_SSE2(radius, 32, 64)\
-        DEGRAIN_SSE2(radius, 64, 16)\
-        DEGRAIN_SSE2(radius, 64, 32)\
-        DEGRAIN_SSE2(radius, 64, 64)\
-        DEGRAIN_SSE2(radius, 64, 128)\
-        DEGRAIN_SSE2(radius, 128, 32)\
-        DEGRAIN_SSE2(radius, 128, 64)\
-        DEGRAIN_SSE2(radius, 128, 128)\
-    }
+#define DEGRAIN(radius, width, height) \
+    { KEY(width, height, 8), Degrain_sse2<radius, width, height> }, \
+    { KEY(width, height, 16), Degrain_C16<radius, width, height> },
 #else
-#define DEGRAIN_SSE2(radius, width, height)
-#define DEGRAIN_LEVEL_SSE2(radius)
+#define DEGRAIN(radius, width, height) \
+    { KEY(width, height, 8), Degrain_C8<radius, width, height> }, \
+    { KEY(width, height, 16), Degrain_C16<radius, width, height> },
 #endif
 
-#define DEGRAIN(radius, width, height) \
-    { KEY(width, height, 8, MVOPT_SCALAR), Degrain_C8<radius, width, height> }, \
-    { KEY(width, height, 16, MVOPT_SCALAR), Degrain_C16<radius, width, height> },
+#define DEGRAIN_C(radius, width, height) \
+    { KEY(width, height, 8), Degrain_C8<radius, width, height> }, \
+    { KEY(width, height, 16), Degrain_C16<radius, width, height> },
 
 #define DEGRAIN_LEVEL(radius)\
     {\
-        DEGRAIN(radius, 2, 2)\
-        DEGRAIN(radius, 2, 4)\
+        DEGRAIN_C(radius, 2, 2)\
+        DEGRAIN_C(radius, 2, 4)\
         DEGRAIN(radius, 4, 2)\
         DEGRAIN(radius, 4, 4)\
         DEGRAIN(radius, 4, 8)\
@@ -433,40 +408,20 @@ static const std::unordered_map<uint32_t, DenoiseFunction> degrain_functions[6] 
     DEGRAIN_LEVEL(6),
 };
 
-#if defined(MVTOOLS_X86)
-static const std::unordered_map<uint32_t, DenoiseFunction> degrain_functions_sse2[6] = {
-    DEGRAIN_LEVEL_SSE2(1),
-    DEGRAIN_LEVEL_SSE2(2),
-    DEGRAIN_LEVEL_SSE2(3),
-    DEGRAIN_LEVEL_SSE2(4),
-    DEGRAIN_LEVEL_SSE2(5),
-    DEGRAIN_LEVEL_SSE2(6),
-};
-#endif
-
 static DenoiseFunction selectDegrainFunction(unsigned radius, unsigned width, unsigned height, unsigned bits) {
-    DenoiseFunction degrain = degrain_functions[radius - 1].at(KEY(width, height, bits, MVOPT_SCALAR));
+    DenoiseFunction degrain = degrain_functions[radius - 1].at(KEY(width, height, bits));
 
 #if defined(MVTOOLS_X86)
-    try {
-        degrain = degrain_functions_sse2[radius - 1].at(KEY(width, height, bits, MVOPT_SSE2));
-    } catch (std::out_of_range &) { }
-#if defined(MVTOOLS_X86)
-    if (g_cpuinfo & MVU_CPU_AVX2) {
-        DenoiseFunction tmp = selectDegrainFunctionAVX2(radius, width, height, bits);
-        if (tmp)
-            degrain = tmp;
-    }
-#endif
+    if (g_cpuinfo & MVU_CPU_AVX2)
+        selectDegrainFunctionAVX2(radius, width, height, bits, degrain);
 #endif
 
     return degrain;
 }
 
 #undef DEGRAIN
-#undef DEGRAIN_SSE2
+#undef DEGRAIN_C
 #undef DEGRAIN_LEVEL
-#undef DEGRAIN_LEVEL_SSE2
 
 #undef KEY
 

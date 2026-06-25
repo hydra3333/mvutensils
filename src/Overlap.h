@@ -67,5 +67,5 @@ static void ToPixels(uint8_t * MVU_RESTRICT pDst8, ptrdiff_t nDstPitch, const ui
 OverlapsFunction selectOverlapsFunction(unsigned width, unsigned height, unsigned bits);
 
 #if defined(MVTOOLS_X86)
-OverlapsFunction selectOverlapsFunctionAVX2(unsigned width, unsigned height, unsigned bits);
+void selectOverlapsFunctionAVX2(unsigned width, unsigned height, unsigned bits, OverlapsFunction &overs);
 #endif

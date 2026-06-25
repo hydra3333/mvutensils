@@ -3,24 +3,17 @@
 
 #include "Degrains.h"
 
-enum InstructionSets {
-    Scalar,
-    SSE2,
-    AVX2,
-};
-
-// opt can fit in four bits, if the width and height need more than eight bits each.
-#define KEY(width, height, bits, opt) (unsigned)(width) << 24 | (height) << 16 | (bits) << 8 | (opt)
+#define KEY(width, height, bits) (unsigned)(width) << 24 | (height) << 16 | (bits) << 8
 
 #ifdef MVTOOLS_X86
 #define DEGRAIN_AVX2(radius, width, height) \
-    { KEY(width, height, 8, AVX2), Degrain_avx2<radius, width, height> }, \
-    { KEY(width, height, 16, AVX2), Degrain_uint16_avx2<radius, width, height> },
+    { KEY(width, height, 8), Degrain_avx2<radius, width, height> }, \
+    { KEY(width, height, 16), Degrain_uint16_avx2<radius, width, height> },
 
 // 8-bit only -- no 16-bit 2xN kernel (width 2 stays scalar for 16-bit pixels).
 #define DEGRAIN_W2_AVX2(radius) \
-    { KEY(2, 2, 8, AVX2), Degrain_avx2<radius, 2, 2> }, \
-    { KEY(2, 4, 8, AVX2), Degrain_avx2<radius, 2, 4> },
+    { KEY(2, 2, 8), Degrain_avx2<radius, 2, 2> }, \
+    { KEY(2, 4, 8), Degrain_avx2<radius, 2, 4> },
 
 #define DEGRAIN_LEVEL_AVX2(radius) \
     {\
@@ -219,10 +212,9 @@ static const std::unordered_map<uint32_t, DenoiseFunction> degrain_functions[6] 
     DEGRAIN_LEVEL_AVX2(6),
 };
 
-DenoiseFunction selectDegrainFunctionAVX2(unsigned radius, unsigned width, unsigned height, unsigned bits) noexcept {
-    try {
-        return degrain_functions[radius - 1].at(KEY(width, height, bits, AVX2));
-    } catch (std::out_of_range &) {
-        return nullptr;
-    }
+void selectDegrainFunctionAVX2(unsigned radius, unsigned width, unsigned height, unsigned bits, DenoiseFunction &degrain) noexcept {
+    const auto &m = degrain_functions[radius - 1];
+    auto it = m.find(KEY(width, height, bits));
+    if (it != m.end())
+        degrain = it->second;
 }

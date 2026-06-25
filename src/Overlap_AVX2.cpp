@@ -55,21 +55,13 @@ static void overlaps_avx2_u16(uint8_t *pDst8, ptrdiff_t nDstPitch, const uint8_t
 #endif
 
 
-enum InstructionSets {
-    Scalar,
-    SSE2,
-    AVX2,
-};
-
-
-// opt can fit in four bits, if the width and height need more than eight bits each.
-#define KEY(width, height, bits, opt) (unsigned)(width) << 24 | (height) << 16 | (bits) << 8 | (opt)
+#define KEY(width, height, bits) (unsigned)(width) << 24 | (height) << 16 | (bits) << 8
 
 #if defined(MVTOOLS_X86)
 #define OVERS_AVX2(width, height) \
-    { KEY(width, height, 8, AVX2), overlaps_avx2<width, height> },
+    { KEY(width, height, 8), overlaps_avx2<width, height> },
 #define OVERS_AVX2_16(width, height) \
-    { KEY(width, height, 16, AVX2), overlaps_avx2_u16<width, height> },
+    { KEY(width, height, 16), overlaps_avx2_u16<width, height> },
 #else
 #define OVERS_AVX2(width, height)
 #define OVERS_AVX2_16(width, height)
@@ -120,10 +112,8 @@ static const std::unordered_map<uint32_t, OverlapsFunction> overlaps_functions =
 };
 
 
-OverlapsFunction selectOverlapsFunctionAVX2(unsigned width, unsigned height, unsigned bits) {
-    try {
-        return overlaps_functions.at(KEY(width, height, bits, AVX2));
-    } catch (std::out_of_range &) {
-        return nullptr;
-    }
+void selectOverlapsFunctionAVX2(unsigned width, unsigned height, unsigned bits, OverlapsFunction &overs) {
+    auto it = overlaps_functions.find(KEY(width, height, bits));
+    if (it != overlaps_functions.end())
+        overs = it->second;
 }

@@ -26,8 +26,6 @@
 #include "CPU.h"
 #include "Overlap.h"
 
-extern uint32_t g_cpuinfo;
-
 void OverlapWindows::Init(int nx, int ny, int ox, int oy) {
     this->nx = nx;
     this->ny = ny;
@@ -245,26 +243,27 @@ struct OverlapsWrapper16<4, blockHeight> {
 #endif
 
 
-// opt can fit in four bits, if the width and height need more than eight bits each.
-#define KEY(width, height, bits, opt) (unsigned)(width) << 24 | (height) << 16 | (bits) << 8 | (opt)
+#define KEY(width, height, bits) (unsigned)(width) << 24 | (height) << 16 | (bits) << 8
 
+// On x86 the SSE2 kernel takes the scalar version's place directly in the map (no instruction-set
+// key). Width-2 has no SSE2 kernel, so it always uses the scalar version (OVERS_C).
 #if defined(MVTOOLS_X86)
-#define OVERS_SSE2(width, height) \
-    { KEY(width, height, 8, MVOPT_SSE2), OverlapsWrapper<width, height>::overlaps_sse2 },
-#define OVERS_SSE2_16(width, height) \
-    { KEY(width, height, 16, MVOPT_SSE2), OverlapsWrapper16<width, height>::overlaps_sse2 },
+#define OVERS(width, height) \
+    { KEY(width, height, 8), OverlapsWrapper<width, height>::overlaps_sse2 }, \
+    { KEY(width, height, 16), OverlapsWrapper16<width, height>::overlaps_sse2 },
 #else
-#define OVERS_SSE2(width, height)
-#define OVERS_SSE2_16(width, height)
+#define OVERS(width, height) \
+    { KEY(width, height, 8), overlaps_c<width, height, uint16_t, uint8_t> }, \
+    { KEY(width, height, 16), overlaps_c<width, height, uint32_t, uint16_t> },
 #endif
 
-#define OVERS(width, height) \
-    { KEY(width, height, 8, MVOPT_SCALAR), overlaps_c<width, height, uint16_t, uint8_t> }, \
-    { KEY(width, height, 16, MVOPT_SCALAR), overlaps_c<width, height, uint32_t, uint16_t> },
+#define OVERS_C(width, height) \
+    { KEY(width, height, 8), overlaps_c<width, height, uint16_t, uint8_t> }, \
+    { KEY(width, height, 16), overlaps_c<width, height, uint32_t, uint16_t> },
 
 static const std::unordered_map<uint32_t, OverlapsFunction> overlaps_functions = {
-    OVERS(2, 2)
-    OVERS(2, 4)
+    OVERS_C(2, 2)
+    OVERS_C(2, 4)
     OVERS(4, 2)
     OVERS(4, 4)
     OVERS(4, 8)
@@ -290,76 +289,19 @@ static const std::unordered_map<uint32_t, OverlapsFunction> overlaps_functions =
     OVERS(128, 32)
     OVERS(128, 64)
     OVERS(128, 128)
-    OVERS_SSE2(4, 2)
-    OVERS_SSE2(4, 4)
-    OVERS_SSE2(4, 8)
-    OVERS_SSE2(8, 1)
-    OVERS_SSE2(8, 2)
-    OVERS_SSE2(8, 4)
-    OVERS_SSE2(8, 8)
-    OVERS_SSE2(8, 16)
-    OVERS_SSE2(16, 1)
-    OVERS_SSE2(16, 2)
-    OVERS_SSE2(16, 4)
-    OVERS_SSE2(16, 8)
-    OVERS_SSE2(16, 16)
-    OVERS_SSE2(16, 32)
-    OVERS_SSE2(32, 8)
-    OVERS_SSE2(32, 16)
-    OVERS_SSE2(32, 32)
-    OVERS_SSE2(32, 64)
-    OVERS_SSE2(64, 16)
-    OVERS_SSE2(64, 32)
-    OVERS_SSE2(64, 64)
-    OVERS_SSE2(64, 128)
-    OVERS_SSE2(128, 32)
-    OVERS_SSE2(128, 64)
-    OVERS_SSE2(128, 128)
-    OVERS_SSE2_16(4, 2)
-    OVERS_SSE2_16(4, 4)
-    OVERS_SSE2_16(4, 8)
-    OVERS_SSE2_16(8, 1)
-    OVERS_SSE2_16(8, 2)
-    OVERS_SSE2_16(8, 4)
-    OVERS_SSE2_16(8, 8)
-    OVERS_SSE2_16(8, 16)
-    OVERS_SSE2_16(16, 1)
-    OVERS_SSE2_16(16, 2)
-    OVERS_SSE2_16(16, 4)
-    OVERS_SSE2_16(16, 8)
-    OVERS_SSE2_16(16, 16)
-    OVERS_SSE2_16(16, 32)
-    OVERS_SSE2_16(32, 8)
-    OVERS_SSE2_16(32, 16)
-    OVERS_SSE2_16(32, 32)
-    OVERS_SSE2_16(32, 64)
-    OVERS_SSE2_16(64, 16)
-    OVERS_SSE2_16(64, 32)
-    OVERS_SSE2_16(64, 64)
-    OVERS_SSE2_16(64, 128)
-    OVERS_SSE2_16(128, 32)
-    OVERS_SSE2_16(128, 64)
-    OVERS_SSE2_16(128, 128)
 };
 
 OverlapsFunction selectOverlapsFunction(unsigned width, unsigned height, unsigned bits) {
-    OverlapsFunction overs = overlaps_functions.at(KEY(width, height, bits, MVOPT_SCALAR));
+    OverlapsFunction overs = overlaps_functions.at(KEY(width, height, bits));
 
 #if defined(MVTOOLS_X86)
-    try {
-        overs = overlaps_functions.at(KEY(width, height, bits, MVOPT_SSE2));
-    } catch (std::out_of_range &) { }
-    if (g_cpuinfo & MVU_CPU_AVX2) {
-        OverlapsFunction tmp = selectOverlapsFunctionAVX2(width, height, bits);
-        if (tmp)
-            overs = tmp;
-    }
+    if (g_cpuinfo & MVU_CPU_AVX2)
+        selectOverlapsFunctionAVX2(width, height, bits, overs);
 #endif
 
     return overs;
 }
 
 #undef OVERS
-#undef OVERS_SSE2
-#undef OVERS_SSE2_16
+#undef OVERS_C
 #undef KEY

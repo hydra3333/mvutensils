@@ -103,16 +103,14 @@ struct SADWrapperU16_AVX2 {
 };
 
 
-// opt can fit in four bits, if the width and height need more than eight bits each.
-#define KEY(width, height, bits, opt) (unsigned)(width) << 24 | (height) << 16 | (bits) << 8 | (opt)
+#define KEY(width, height, bits) (unsigned)(width) << 24 | (height) << 16 | (bits) << 8
 
-
-// The opt field is hardcoded 0: this AVX2 map is private to this TU and is only ever queried
-// here (via selectSADFunctionAVX2), never merged with the main InstructionSets-keyed map.
+// This AVX2 map is private to this TU and only queried via selectSADFunctionAVX2, which overwrites
+// the caller's function pointer when a kernel exists for the requested size.
 #define SAD_U8_AVX2(width, height) \
-    { KEY(width, height, 8, 0), SADWrapperU8_AVX2<width, height>::sad_u8_avx2 },
+    { KEY(width, height, 8), SADWrapperU8_AVX2<width, height>::sad_u8_avx2 },
 #define SAD_U16_AVX2(width, height) \
-    { KEY(width, height, 16, 0), SADWrapperU16_AVX2<width, height>::sad_u16_avx2 },
+    { KEY(width, height, 16), SADWrapperU16_AVX2<width, height>::sad_u16_avx2 },
 
 static const std::unordered_map<uint32_t, SADFunction> sad_functions = {
     SAD_U8_AVX2(16, 2)
@@ -151,12 +149,10 @@ static const std::unordered_map<uint32_t, SADFunction> sad_functions = {
     SAD_U16_AVX2(128, 128)
 };
 
-SADFunction selectSADFunctionAVX2(unsigned width, unsigned height, unsigned bits) {
-    try {
-        return sad_functions.at(KEY(width, height, bits, 0));
-    } catch (const std::out_of_range &) {
-        return nullptr;
-    }
+void selectSADFunctionAVX2(unsigned width, unsigned height, unsigned bits, SADFunction &sad) {
+    auto it = sad_functions.find(KEY(width, height, bits));
+    if (it != sad_functions.end())
+        sad = it->second;
 }
 
 
@@ -274,8 +270,8 @@ static unsigned int satd_u16_avx2(const uint8_t *src, intptr_t sp, const uint8_t
     return (unsigned)(sum > 0xFFFFFFFFu ? 0xFFFFFFFFu : sum);
 }
 
-#define SATD_U8_AVX2(width, height) { KEY(width, height, 8, 0), satd_u8_avx2<width, height> },
-#define SATD_U16_AVX2(width, height) { KEY(width, height, 16, 0), satd_u16_avx2<width, height> },
+#define SATD_U8_AVX2(width, height) { KEY(width, height, 8), satd_u8_avx2<width, height> },
+#define SATD_U16_AVX2(width, height) { KEY(width, height, 16), satd_u16_avx2<width, height> },
 static const std::unordered_map<uint32_t, SADFunction> satd_functions = {
     SATD_U8_AVX2(8, 8)
     SATD_U8_AVX2(16, 8) SATD_U8_AVX2(16, 16)
@@ -286,12 +282,10 @@ static const std::unordered_map<uint32_t, SADFunction> satd_functions = {
     SATD_U16_AVX2(64, 64) SATD_U16_AVX2(128, 64) SATD_U16_AVX2(128, 128)
 };
 
-SADFunction selectSATDFunctionAVX2(unsigned width, unsigned height, unsigned bits) {
-    try {
-        return satd_functions.at(KEY(width, height, bits, 0));
-    } catch (const std::out_of_range &) {
-        return nullptr;
-    }
+void selectSATDFunctionAVX2(unsigned width, unsigned height, unsigned bits, SADFunction &satd) {
+    auto it = satd_functions.find(KEY(width, height, bits));
+    if (it != satd_functions.end())
+        satd = it->second;
 }
 
 #endif // MVTOOLS_X86

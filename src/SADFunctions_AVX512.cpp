@@ -136,10 +136,10 @@ static unsigned int satd_u8_avx512(const uint8_t *src, intptr_t sp, const uint8_
     return (unsigned)(sum > 0xFFFFFFFFu ? 0xFFFFFFFFu : sum);
 }
 
-#define KEY(width, height, bits, opt) (unsigned)(width) << 24 | (height) << 16 | (bits) << 8 | (opt)
+#define KEY(width, height, bits) (unsigned)(width) << 24 | (height) << 16 | (bits) << 8
 
-#define SAD_U8_AVX512(width, height)  { KEY(width, height, 8, 0), SADWrapperU8_AVX512<width, height>::sad_u8_avx512 },
-#define SAD_U16_AVX512(width, height) { KEY(width, height, 16, 0), SADWrapperU16_AVX512<width, height>::sad_u16_avx512 },
+#define SAD_U8_AVX512(width, height)  { KEY(width, height, 8), SADWrapperU8_AVX512<width, height>::sad_u8_avx512 },
+#define SAD_U16_AVX512(width, height) { KEY(width, height, 16), SADWrapperU16_AVX512<width, height>::sad_u16_avx512 },
 
 static const std::unordered_map<uint32_t, SADFunction> sad_functions = {
     // 8-bit: width >= 64 only
@@ -152,8 +152,8 @@ static const std::unordered_map<uint32_t, SADFunction> sad_functions = {
     SAD_U16_AVX512(128, 32) SAD_U16_AVX512(128, 64) SAD_U16_AVX512(128, 128)
 };
 
-#define SATD_U8_AVX512(width, height)  { KEY(width, height, 8, 0), satd_u8_avx512<width, height> },
-#define SATD_U16_AVX512(width, height) { KEY(width, height, 16, 0), satd_u16_avx512<width, height> },
+#define SATD_U8_AVX512(width, height)  { KEY(width, height, 8), satd_u8_avx512<width, height> },
+#define SATD_U16_AVX512(width, height) { KEY(width, height, 16), satd_u16_avx512<width, height> },
 
 static const std::unordered_map<uint32_t, SADFunction> satd_functions = {
     // 8-bit: width >= 32
@@ -164,20 +164,16 @@ static const std::unordered_map<uint32_t, SADFunction> satd_functions = {
     SATD_U16_AVX512(64, 32) SATD_U16_AVX512(64, 64) SATD_U16_AVX512(128, 64) SATD_U16_AVX512(128, 128)
 };
 
-SADFunction selectSADFunctionAVX512(unsigned width, unsigned height, unsigned bits) {
-    try {
-        return sad_functions.at(KEY(width, height, bits, 0));
-    } catch (const std::out_of_range &) {
-        return nullptr;
-    }
+void selectSADFunctionAVX512(unsigned width, unsigned height, unsigned bits, SADFunction &sad) {
+    auto it = sad_functions.find(KEY(width, height, bits));
+    if (it != sad_functions.end())
+        sad = it->second;
 }
 
-SADFunction selectSATDFunctionAVX512(unsigned width, unsigned height, unsigned bits) {
-    try {
-        return satd_functions.at(KEY(width, height, bits, 0));
-    } catch (const std::out_of_range &) {
-        return nullptr;
-    }
+void selectSATDFunctionAVX512(unsigned width, unsigned height, unsigned bits, SADFunction &satd) {
+    auto it = satd_functions.find(KEY(width, height, bits));
+    if (it != satd_functions.end())
+        satd = it->second;
 }
 
 #endif // MVTOOLS_X86

@@ -6,13 +6,6 @@
 #include "SADFunctions.h"
 #include "Common.h"
 
-enum InstructionSets {
-    Scalar,
-    SSE2,
-};
-
-extern uint32_t g_cpuinfo;
-
 #if defined(MVTOOLS_X86)
 
 #include <emmintrin.h>
@@ -271,25 +264,20 @@ unsigned int sad_c(const uint8_t *pSrc8, intptr_t nSrcPitch, const uint8_t *pRef
 }
 
 
-// opt can fit in four bits, if the width and height need more than eight bits each.
-#define KEY(width, height, bits, opt) (unsigned)(width) << 24 | (height) << 16 | (bits) << 8 | (opt)
+#define KEY(width, height, bits) (unsigned)(width) << 24 | (height) << 16 | (bits) << 8
 
-
+// SSE2 is baseline on x86-64 and an intrinsic wrapper exists for every block size, so on x86 the
+// SSE2 kernel takes the scalar version's place directly in the map (no instruction-set key, no
+// separate map). On non-x86 the same macro emits the scalar kernel.
 #if defined(MVTOOLS_X86)
-#define SAD_U8_SSE2(width, height) \
-    { KEY(width, height, 8, SSE2), SADWrapperU8<width, height>::sad_u8_sse2 },
-
-#define SAD_U16_SSE2(width, height) \
-    { KEY(width, height, 16, SSE2), SADWrapperU16<width, height>::sad_u16_sse2 },
-
-#else
-#define SAD_U8_SSE2(width, height)
-#define SAD_U16_SSE2(width, height)
-#endif
-
 #define SAD(width, height) \
-    { KEY(width, height, 8, Scalar), sad_c<width, height, uint8_t> }, \
-    { KEY(width, height, 16, Scalar), sad_c<width, height, uint16_t> },
+    { KEY(width, height, 8), SADWrapperU8<width, height>::sad_u8_sse2 }, \
+    { KEY(width, height, 16), SADWrapperU16<width, height>::sad_u16_sse2 },
+#else
+#define SAD(width, height) \
+    { KEY(width, height, 8), sad_c<width, height, uint8_t> }, \
+    { KEY(width, height, 16), sad_c<width, height, uint16_t> },
+#endif
 
 static const std::unordered_map<uint32_t, SADFunction> sad_functions = {
     SAD(2, 2)
@@ -319,90 +307,21 @@ static const std::unordered_map<uint32_t, SADFunction> sad_functions = {
     SAD(128, 32)
     SAD(128, 64)
     SAD(128, 128)
-#if defined(MVTOOLS_X86)
-    SAD_U8_SSE2(2, 2)
-    SAD_U8_SSE2(2, 4)
-    SAD_U8_SSE2(4, 2)
-    SAD_U8_SSE2(4, 4)
-    SAD_U8_SSE2(4, 8)
-    SAD_U8_SSE2(8, 1)
-    SAD_U8_SSE2(8, 2)
-    SAD_U8_SSE2(8, 4)
-    SAD_U8_SSE2(8, 8)
-    SAD_U8_SSE2(8, 16)
-    SAD_U8_SSE2(16, 1)
-    SAD_U8_SSE2(16, 2)
-    SAD_U8_SSE2(16, 4)
-    SAD_U8_SSE2(16, 8)
-    SAD_U8_SSE2(16, 16)
-    SAD_U8_SSE2(16, 32)
-    SAD_U8_SSE2(32, 8)
-    SAD_U8_SSE2(32, 16)
-    SAD_U8_SSE2(32, 32)
-    SAD_U8_SSE2(32, 64)
-    SAD_U8_SSE2(64, 16)
-    SAD_U8_SSE2(64, 32)
-    SAD_U8_SSE2(64, 64)
-    SAD_U8_SSE2(64, 128)
-    SAD_U8_SSE2(128, 32)
-    SAD_U8_SSE2(128, 64)
-    SAD_U8_SSE2(128, 128)
-    SAD_U16_SSE2(2, 2)
-    SAD_U16_SSE2(2, 4)
-    SAD_U16_SSE2(4, 2)
-    SAD_U16_SSE2(4, 4)
-    SAD_U16_SSE2(4, 8)
-    SAD_U16_SSE2(8, 1)
-    SAD_U16_SSE2(8, 2)
-    SAD_U16_SSE2(8, 4)
-    SAD_U16_SSE2(8, 8)
-    SAD_U16_SSE2(8, 16)
-    SAD_U16_SSE2(16, 1)
-    SAD_U16_SSE2(16, 2)
-    SAD_U16_SSE2(16, 4)
-    SAD_U16_SSE2(16, 8)
-    SAD_U16_SSE2(16, 16)
-    SAD_U16_SSE2(16, 32)
-    SAD_U16_SSE2(32, 8)
-    SAD_U16_SSE2(32, 16)
-    SAD_U16_SSE2(32, 32)
-    SAD_U16_SSE2(32, 64)
-    SAD_U16_SSE2(64, 16)
-    SAD_U16_SSE2(64, 32)
-    SAD_U16_SSE2(64, 64)
-    SAD_U16_SSE2(64, 128)
-    SAD_U16_SSE2(128, 32)
-    SAD_U16_SSE2(128, 64)
-    SAD_U16_SSE2(128, 128)
-#endif
 };
 
 SADFunction selectSADFunction(unsigned width, unsigned height, unsigned bits) {
-    SADFunction sad = sad_functions.at(KEY(width, height, bits, Scalar));
+    SADFunction sad = sad_functions.at(KEY(width, height, bits));
 
 #if defined(MVTOOLS_X86)
-    // SSE2 is baseline on x86-64; the intrinsic wrapper exists for every block size.
-    try {
-        sad = sad_functions.at(KEY(width, height, bits, SSE2));
-    } catch (std::out_of_range &) { }
-
-    if (g_cpuinfo & MVU_CPU_AVX2) {
-        SADFunction tmp = selectSADFunctionAVX2(width, height, bits);
-        if (tmp)
-            sad = tmp;
-    }
-    if (g_cpuinfo & MVU_CPU_AVX512_BASE) {
-        SADFunction tmp = selectSADFunctionAVX512(width, height, bits);
-        if (tmp)
-            sad = tmp;
-    }
+    if (g_cpuinfo & MVU_CPU_AVX2)
+        selectSADFunctionAVX2(width, height, bits, sad);
+    if (g_cpuinfo & MVU_CPU_AVX512_BASE)
+        selectSADFunctionAVX512(width, height, bits, sad);
 #endif
 
     return sad;
 }
 
-#undef SAD_U8_SSE2
-#undef SAD_U16_SSE2
 #undef SAD
 
 
@@ -642,23 +561,16 @@ static unsigned int satd_u16_sse2(const uint8_t *src, intptr_t sp, const uint8_t
 }
 #endif
 
+// As with SAD: on x86 the SSE2 kernel replaces the scalar version directly in the map.
 #if defined(MVTOOLS_X86)
-#define SATD_U8_SSE2(width, height) \
-    { KEY(width, height, 8, SSE2), satd_u8_sse2<width, height> },
-#define SATD_U16_SSE2(width, height) \
-    { KEY(width, height, 16, SSE2), satd_u16_sse2<width, height> },
-#else
-#define SATD_U8_SSE2(width, height)
-#define SATD_U16_SSE2(width, height)
-#endif
-
 #define SATD(width, height) \
-    { KEY(width, height, 8, Scalar), Satd_C<width, height, uint8_t> }, \
-    { KEY(width, height, 16, Scalar), Satd_C<width, height, uint16_t> },
-
-#define SATD_SSE2(width, height) \
-    SATD_U8_SSE2(width, height) \
-    SATD_U16_SSE2(width, height)
+    { KEY(width, height, 8), satd_u8_sse2<width, height> }, \
+    { KEY(width, height, 16), satd_u16_sse2<width, height> },
+#else
+#define SATD(width, height) \
+    { KEY(width, height, 8), Satd_C<width, height, uint8_t> }, \
+    { KEY(width, height, 16), Satd_C<width, height, uint16_t> },
+#endif
 
 static const std::unordered_map<uint32_t, SADFunction> satd_functions = {
     SATD(4, 4)
@@ -672,47 +584,21 @@ static const std::unordered_map<uint32_t, SADFunction> satd_functions = {
     SATD(64, 64)
     SATD(128, 64)
     SATD(128, 128)
-#if defined(MVTOOLS_X86)
-    SATD_SSE2(4, 4)
-    SATD_SSE2(8, 4)
-    SATD_SSE2(8, 8)
-    SATD_SSE2(16, 8)
-    SATD_SSE2(16, 16)
-    SATD_SSE2(32, 16)
-    SATD_SSE2(32, 32)
-    SATD_SSE2(64, 32)
-    SATD_SSE2(64, 64)
-    SATD_SSE2(128, 64)
-    SATD_SSE2(128, 128)
-#endif
 };
 
 SADFunction selectSATDFunction(unsigned width, unsigned height, unsigned bits) {
-    SADFunction satd = satd_functions.at(KEY(width, height, bits, Scalar));
+    SADFunction satd = satd_functions.at(KEY(width, height, bits));
 
 #if defined(MVTOOLS_X86)
-    try {
-        satd = satd_functions.at(KEY(width, height, bits, SSE2));
-    } catch (std::out_of_range &) { }
-
-    if (g_cpuinfo & MVU_CPU_AVX2) {
-        SADFunction tmp = selectSATDFunctionAVX2(width, height, bits);
-        if (tmp)
-            satd = tmp;
-    }
-    if (g_cpuinfo & MVU_CPU_AVX512_BASE) {
-        SADFunction tmp = selectSATDFunctionAVX512(width, height, bits);
-        if (tmp)
-            satd = tmp;
-    }
+    if (g_cpuinfo & MVU_CPU_AVX2)
+        selectSATDFunctionAVX2(width, height, bits, satd);
+    if (g_cpuinfo & MVU_CPU_AVX512_BASE)
+        selectSATDFunctionAVX512(width, height, bits, satd);
 #endif
 
     return satd;
 }
 
-#undef SATD_U8_SSE2
-#undef SATD_U16_SSE2
-#undef SATD_SSE2
 #undef SATD
 
 #undef KEY
