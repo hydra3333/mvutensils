@@ -31,6 +31,7 @@ if host_machine.cpu_family() == 'x86_64'
             'src/Degrains_AVX2.cpp',
             'src/Overlap_AVX2.cpp',
             'src/SADFunctions_AVX2.cpp',
+            'src/FlowShared_AVX2.cpp',
         ),
         cpp_args: '-march=x86-64-v3',
         gnu_symbol_visibility: 'hidden',
