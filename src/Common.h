@@ -63,7 +63,7 @@ static inline void mvu_bitblt(void *dstp, ptrdiff_t dst_stride, const void *srcp
 }
 
 /* returns the biggest integer x such as 2^x <= i */
-inline static int ilog2(int i) {
+static constexpr inline int ilog2(int i) {
     int result = 0;
     while (i > 1) {
         i /= 2;
