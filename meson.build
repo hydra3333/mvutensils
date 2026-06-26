@@ -43,7 +43,7 @@ if host_machine.cpu_family() == 'x86_64'
             'src/SADFunctions_AVX512.cpp',
             'src/FlowShared_AVX512.cpp',
         ),
-        cpp_args: '-march=x86-64-v4 -mprefer-vector-width=512',
+        cpp_args: ['-march=x86-64-v4', '-mprefer-vector-width=512'],
         gnu_symbol_visibility: 'hidden',
         include_directories: incdir,
     )
