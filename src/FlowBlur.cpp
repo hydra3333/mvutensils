@@ -69,17 +69,33 @@ static void FlowBlur(uint8_t * MVU_RESTRICT pdst8, ptrdiff_t dst_pitch, const Py
     dst_pitch /= sizeof(PixelType);
     tilePitch /= sizeof(int16_t);
     int nPelLog = ilog2(pref.nPel);
+    const int64_t thresh = 256LL * prec; // max(|vx0|,|vy0|) < thresh  <=>  m == 0 (no taps; centre pixel only)
 
     /* very slow, but precise motion blur */
     for (int h = 0; h < height; h++) {
         int yBase = (h + dstY) << nPelLog;
-        const PixelType *prefPtr = reinterpret_cast<const PixelType *>(pref.GetPointer<PixelType>(dstX << nPelLog, yBase));
+        // Centre (zero-motion) row taken straight from the base sub-plane (pPlane[0]) instead of GetPointer():
+        // both coords are nPel multiples so GetPointer resolves to sub-plane 0 anyway, and a plain base+offset
+        // restrict pointer lets the vectorizer handle the common both-zero copy below.
+        const PixelType *MVU_RESTRICT prefPtr = reinterpret_cast<const PixelType *>(
+            pref.pPlane[0] + (ptrdiff_t)(h + dstY + pref.nVPadding) * pref.nPitch
+                           + (ptrdiff_t)(dstX + pref.nHPadding) * (ptrdiff_t)sizeof(PixelType));
         for (int w = 0; w < width; w++) {
-            int xBase = (w + dstX) << nPelLog;
-            int64_t blurredsum = prefPtr[w];
             int vxF0 = (static_cast<int>(VXFullF[w]) - (1 << 15)) * blur256;
             int vyF0 = (static_cast<int>(VYFullF[w]) - (1 << 15)) * blur256;
-            int mF = (std::max(abs(vxF0), abs(vyF0)) / prec) >> 8;
+            int vxB0 = (static_cast<int>(VXFullB[w]) - (1 << 15)) * blur256;
+            int vyB0 = (static_cast<int>(VYFullB[w]) - (1 << 15)) * blur256;
+            int aF = std::max(abs(vxF0), abs(vyF0));
+            int aB = std::max(abs(vxB0), abs(vyB0));
+            // Dominant case (~60% of pixels, static regions): no forward and no backward taps, so the result
+            // is just the centre pixel. Skips both /prec divisions and the 64-bit /(mF+mB+1) divide.
+            if (aF < thresh && aB < thresh) {
+                pdst[w] = prefPtr[w];
+                continue;
+            }
+            int xBase = (w + dstX) << nPelLog;
+            int64_t blurredsum = prefPtr[w];
+            int mF = (aF / prec) >> 8;
             if (mF > 0) {
                 vxF0 /= mF;
                 vyF0 /= mF;
@@ -92,9 +108,7 @@ static void FlowBlur(uint8_t * MVU_RESTRICT pdst8, ptrdiff_t dst_pitch, const Py
                     vyF += vyF0;
                 }
             }
-            int vxB0 = (static_cast<int>(VXFullB[w]) - (1 << 15)) * blur256;
-            int vyB0 = (static_cast<int>(VYFullB[w]) - (1 << 15)) * blur256;
-            int mB = (std::max(abs(vxB0), abs(vyB0)) / prec) >> 8;
+            int mB = (aB / prec) >> 8;
             if (mB > 0) {
                 vxB0 /= mB;
                 vyB0 /= mB;
