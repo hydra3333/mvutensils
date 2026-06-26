@@ -188,6 +188,37 @@ static void flowinterextra_impl(uint8_t *MVU_RESTRICT pdst, ptrdiff_t dst_pitch,
     }
 }
 
+// flowFetch: motion-compensated copy -- one gather + store per pixel, no blend. This is the purest
+// gather kernel (the scalar has ~no arithmetic to amortise), so its speed is exactly vpgatherdd's
+// throughput vs 16 scalar loads. NB the motion rounds (+128) before >>8, unlike FlowInter (truncates).
+template <int S>
+static void flowfetch_impl(uint8_t *MVU_RESTRICT pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
+        const uint16_t *VXFull, const uint16_t *VYFull, ptrdiff_t tilePitch,
+        int dstX, int dstY, int width, int height, int time256) noexcept {
+    tilePitch /= sizeof(uint16_t);
+    const int nPelLog = ilog2(pref.nPel);
+    const __m512i lanes = _mm512_setr_epi32(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+    const __m512i v32768 = _mm512_set1_epi32(32768), v128 = _mm512_set1_epi32(128), vtime = _mm512_set1_epi32(time256);
+
+    auto motion = [&](const uint16_t *V, __mmask16 k) { // ((V - 32768)*time256 + 128) >> 8
+        return _mm512_srai_epi32(_mm512_add_epi32(_mm512_mullo_epi32(_mm512_sub_epi32(ld_u16(V, k), v32768), vtime), v128), 8);
+    };
+
+    for (int h = 0; h < height; h++) {
+        const int yBase = (h + dstY) << nPelLog;
+        const __m512i vyBase = _mm512_set1_epi32(yBase);
+        for (int w = 0; w < width; w += 16) {
+            const __mmask16 k = (width - w >= 16) ? (__mmask16)0xFFFF : (__mmask16)((1u << (width - w)) - 1);
+            const __m512i xBase = _mm512_slli_epi32(_mm512_add_epi32(lanes, _mm512_set1_epi32(w + dstX)), nPelLog);
+            __m512i g = mc_gather<S>(pref, _mm512_add_epi32(motion(VXFull + w, k), xBase),
+                                           _mm512_add_epi32(motion(VYFull + w, k), vyBase), k);
+            st_pix<S>(pdst + (size_t)w * S, k, g);
+        }
+        pdst += dst_pitch;
+        VXFull += tilePitch; VYFull += tilePitch;
+    }
+}
+
 void FlowInter_avx512_u8(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &prefB, const PyramidPlane &prefF,
         const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
         const uint16_t *MaskB, const uint16_t *MaskF, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept {
@@ -209,6 +240,15 @@ void FlowInterExtra_avx512_u16(uint8_t *pdst, ptrdiff_t dst_pitch, const Pyramid
         const uint16_t *MaskB, const uint16_t *MaskF, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256,
         const uint16_t *VXFullBB, const uint16_t *VXFullFF, const uint16_t *VYFullBB, const uint16_t *VYFullFF) noexcept {
     flowinterextra_impl<2>(pdst, dst_pitch, prefB, prefF, VXFullB, VXFullF, VYFullB, VYFullF, MaskB, MaskF, tilePitch, dstX, dstY, width, height, time256, VXFullBB, VXFullFF, VYFullBB, VYFullFF);
+}
+
+void FlowFetch_avx512_u8(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
+        const uint16_t *VXFull, const uint16_t *VYFull, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept {
+    flowfetch_impl<1>(pdst, dst_pitch, pref, VXFull, VYFull, tilePitch, dstX, dstY, width, height, time256);
+}
+void FlowFetch_avx512_u16(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
+        const uint16_t *VXFull, const uint16_t *VYFull, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept {
+    flowfetch_impl<2>(pdst, dst_pitch, pref, VXFull, VYFull, tilePitch, dstX, dstY, width, height, time256);
 }
 
 #endif // MVTOOLS_X86

@@ -24,6 +24,10 @@ void FlowInterExtra_avx512_u16(uint8_t *pdst, ptrdiff_t dst_pitch, const Pyramid
     const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
     const uint16_t *MaskB, const uint16_t *MaskF, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256,
     const uint16_t *VXFullBB, const uint16_t *VXFullFF, const uint16_t *VYFullBB, const uint16_t *VYFullFF) noexcept;
+void FlowFetch_avx512_u8(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
+    const uint16_t *VXFull, const uint16_t *VYFull, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept;
+void FlowFetch_avx512_u16(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
+    const uint16_t *VXFull, const uint16_t *VYFull, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept;
 
 // AVX2 gather kernels (FlowShared_AVX2.cpp): 8 px/iter, same addressing/limits as the AVX-512 ones.
 void FlowInter_avx2_u8(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &prefB, const PyramidPlane &prefF,
@@ -40,6 +44,10 @@ void FlowInterExtra_avx2_u16(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPl
     const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
     const uint16_t *MaskB, const uint16_t *MaskF, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256,
     const uint16_t *VXFullBB, const uint16_t *VXFullFF, const uint16_t *VYFullBB, const uint16_t *VYFullFF) noexcept;
+void FlowFetch_avx2_u8(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
+    const uint16_t *VXFull, const uint16_t *VYFull, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept;
+void FlowFetch_avx2_u16(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
+    const uint16_t *VXFull, const uint16_t *VYFull, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept;
 
 // Both gather paths (AVX2 vpgatherdd 8-wide, AVX-512 16-wide) compute signed int32 indices relative to
 // the MIDDLE sub-plane (pPlane[nPel*nPel/2]), so the largest |index| is the bigger half of the
@@ -203,6 +211,33 @@ static void FlowInterExtra_scalar(
     }
 }
 
+// Motion-compensated copy (fetch). One sub-pel load + store per pixel, no blend. Uses GetPointer (NOT
+// PlaneGather): with ~no per-pixel arithmetic the loop never auto-vectorizes, so the branchless hoisted
+// form only adds work -- GetPointer's pel-specialized path is faster here (measured, see flowfetch bench).
+template <typename PixelType>
+static void FlowFetch_scalar(
+        uint8_t *MVU_RESTRICT pdst8, ptrdiff_t dst_pitch, const PyramidPlane &pref,
+        const uint16_t *MVU_RESTRICT VXFull, const uint16_t *MVU_RESTRICT VYFull, ptrdiff_t tilePitch,
+        int dstX, int dstY, int width, int height, int time256) noexcept {
+    PixelType *pdst = (PixelType *)pdst8;
+    dst_pitch /= sizeof(PixelType);
+    tilePitch /= sizeof(int16_t);
+    int nPelLog = ilog2(pref.nPel);
+
+    for (int h = 0; h < height; h++) {
+        int yBase = (h + dstY) << nPelLog;
+        for (int w = 0; w < width; w++) {
+            int xBase = (w + dstX) << nPelLog;
+            int vx = ((static_cast<int>(VXFull[w]) - (1 << 15)) * time256 + 128) >> 8;
+            int vy = ((static_cast<int>(VYFull[w]) - (1 << 15)) * time256 + 128) >> 8;
+            pdst[w] = *reinterpret_cast<const PixelType *>(pref.GetPointer<PixelType>(xBase + vx, yBase + vy));
+        }
+        pdst += dst_pitch;
+        VXFull += tilePitch;
+        VYFull += tilePitch;
+    }
+}
+
 // Dispatch wrappers: best available gather (AVX-512 > AVX2) when the offsets fit int32, else scalar.
 template <typename PixelType>
 static MVU_FORCE_INLINE void FlowInter(
@@ -262,4 +297,30 @@ static MVU_FORCE_INLINE void FlowInterExtra(
     }
 #endif
     FlowInterExtra_scalar<PixelType>(pdst8, dst_pitch, prefB, prefF, VXFullB, VXFullF, VYFullB, VYFullF, MaskB, MaskF, tilePitch, dstX, dstY, width, height, time256, VXFullBB, VXFullFF, VYFullBB, VYFullFF);
+}
+
+template <typename PixelType>
+static MVU_FORCE_INLINE void FlowFetch(
+        uint8_t *MVU_RESTRICT pdst8, ptrdiff_t dst_pitch, const PyramidPlane &pref,
+        const uint16_t *VXFull, const uint16_t *VYFull, ptrdiff_t tilePitch,
+        int dstX, int dstY, int width, int height, int time256) noexcept {
+#if defined(MVTOOLS_X86)
+    if (FlowGatherFits(pref)) {
+        if (g_cpuinfo & MVU_CPU_AVX512_BASE) {
+            if constexpr (sizeof(PixelType) == 1)
+                FlowFetch_avx512_u8(pdst8, dst_pitch, pref, VXFull, VYFull, tilePitch, dstX, dstY, width, height, time256);
+            else
+                FlowFetch_avx512_u16(pdst8, dst_pitch, pref, VXFull, VYFull, tilePitch, dstX, dstY, width, height, time256);
+            return;
+        }
+        if (g_cpuinfo & MVU_CPU_AVX2) {
+            if constexpr (sizeof(PixelType) == 1)
+                FlowFetch_avx2_u8(pdst8, dst_pitch, pref, VXFull, VYFull, tilePitch, dstX, dstY, width, height, time256);
+            else
+                FlowFetch_avx2_u16(pdst8, dst_pitch, pref, VXFull, VYFull, tilePitch, dstX, dstY, width, height, time256);
+            return;
+        }
+    }
+#endif
+    FlowFetch_scalar<PixelType>(pdst8, dst_pitch, pref, VXFull, VYFull, tilePitch, dstX, dstY, width, height, time256);
 }

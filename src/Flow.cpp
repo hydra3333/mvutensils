@@ -28,6 +28,7 @@
 #include "SuperPyramid.h"
 #include "MotionBlockPyramid.h"
 #include "MaskResize.h"
+#include "FlowShared.h" // FlowFetch dispatch (AVX-512/AVX2 vpgatherdd > scalar) + FlowFetch_scalar
 
 struct FlowData {
     VSNode *clip = nullptr;
@@ -59,30 +60,7 @@ struct FlowData {
     }
 };
 
-
-template <typename PixelType>
-static void flowFetch(uint8_t *MVU_RESTRICT pdst8, ptrdiff_t dst_pitch, const PyramidPlane &pref, const uint16_t *MVU_RESTRICT VXFull, const uint16_t *MVU_RESTRICT VYFull, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept {
-    PixelType *pdst = (PixelType *)pdst8;
-
-    dst_pitch /= sizeof(PixelType);
-    tilePitch /= sizeof(int16_t);
-    int nPelLog = ilog2(pref.nPel);
-
-    // fetch mode
-    for (int h = 0; h < height; h++) {
-        int yBase = (h + dstY) << nPelLog;
-        for (int w = 0; w < width; w++) {
-            int xBase = (w + dstX) << nPelLog;
-            // use interpolated image
-            int vx = ((static_cast<int>(VXFull[w]) - (1 << 15)) * time256 + 128) >> 8;
-            int vy = ((static_cast<int>(VYFull[w]) - (1 << 15)) * time256 + 128) >> 8;
-            pdst[w] = *reinterpret_cast<const PixelType *>(pref.GetPointer<PixelType>(xBase + vx, yBase + vy));
-        }
-        pdst += dst_pitch;
-        VXFull += tilePitch;
-        VYFull += tilePitch;
-    }
-}
+// flowFetch (motion-compensated copy) now lives in FlowShared.h as FlowFetch (dispatch) / FlowFetch_scalar.
 
 template<typename PixelType>
 static const VSFrame *VS_CC flowGetFrame(int n, int activationReason, void *instanceData, [[maybe_unused]] void **frameData, VSFrameContext *frameCtx, VSCore *core, const VSAPI *vsapi) noexcept {
@@ -148,7 +126,7 @@ static const VSFrame *VS_CC flowGetFrame(int n, int activationReason, void *inst
                 for (auto &tile : d->maskResizerFull.tiles) {
                     tile.Process(tmp.get(), bufVX, bufVY);
 
-                    flowFetch<PixelType>(dstPtrY + tile.dstX * sizeof(PixelType) + tile.dstY * dstStrideY, dstStrideY, refGOF.GetLevel(0).planes[0],
+                    FlowFetch<PixelType>(dstPtrY + tile.dstX * sizeof(PixelType) + tile.dstY * dstStrideY, dstStrideY, refGOF.GetLevel(0).planes[0],
                         dstTileVX.get(), dstTileVY.get(), MaskResizer::GetTileBufferStride(),
                         tile.dstX, tile.dstY, tile.dstWidth, tile.dstHeight, d->time256);
                 }
@@ -164,11 +142,11 @@ static const VSFrame *VS_CC flowGetFrame(int n, int activationReason, void *inst
                     for (auto &tile : (d->vi->format.subSamplingH > 0 || d->vi->format.subSamplingW > 0) ? d->maskResizerSubSampled.tiles : d->maskResizerFull.tiles) {
                         tile.Process(tmp.get(), bufVX, bufVY);
 
-                        flowFetch<PixelType>(dstPtrU + tile.dstX * sizeof(PixelType) + tile.dstY * dstStrideU, dstStrideU, refGOF.GetLevel(0).planes[1],
+                        FlowFetch<PixelType>(dstPtrU + tile.dstX * sizeof(PixelType) + tile.dstY * dstStrideU, dstStrideU, refGOF.GetLevel(0).planes[1],
                             dstTileVX.get(), dstTileVY.get(), MaskResizer::GetTileBufferStride(),
                             tile.dstX, tile.dstY, tile.dstWidth, tile.dstHeight, d->time256);
 
-                        flowFetch<PixelType>(dstPtrV + tile.dstX * sizeof(PixelType) + tile.dstY * dstStrideV, dstStrideV, refGOF.GetLevel(0).planes[2],
+                        FlowFetch<PixelType>(dstPtrV + tile.dstX * sizeof(PixelType) + tile.dstY * dstStrideV, dstStrideV, refGOF.GetLevel(0).planes[2],
                             dstTileVX.get(), dstTileVY.get(), MaskResizer::GetTileBufferStride(),
                             tile.dstX, tile.dstY, tile.dstWidth, tile.dstHeight, d->time256);
                     }
