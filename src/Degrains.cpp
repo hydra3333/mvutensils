@@ -251,21 +251,9 @@ static const VSFrame *VS_CC degrainGetFrame(int n, int activationReason, void *i
                             xx += nBlkSizeX[plane] * bytesPerSample;
                         }
 
-                        // Right non-covered region (source copy), clamped to actual row count
-                        if (nWidth_B[plane] < frameW)
-                            mvu_bitblt(pDstCur[plane] + nWidth_B[plane] * bytesPerSample, nDstPitches[plane],
-                                pSrcCur[plane] + nWidth_B[plane] * bytesPerSample, nSrcPitches[plane],
-                                (frameW - nWidth_B[plane]) * bytesPerSample, validH);
-
                         pDstCur[plane] += nBlkSizeY[plane] * nDstPitches[plane];
                         pSrcCur[plane] += nBlkSizeY[plane] * nSrcPitches[plane];
                     }
-
-                    // Bottom non-covered region (source copy)
-                    if (nHeight_B[plane] < frameH)
-                        mvu_bitblt(pDstCur[plane], nDstPitches[plane],
-                            pSrcCur[plane], nSrcPitches[plane],
-                            frameW * bytesPerSample, frameH - nHeight_B[plane]);
                 } else { // overlap - sliding window
                     const int stepY = nBlkSizeY[plane] - nOverlapY[plane];
 
