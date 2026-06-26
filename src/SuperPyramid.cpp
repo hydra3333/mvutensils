@@ -5,6 +5,13 @@
 #include <cassert>
 #include <memory>
 
+// Extra scanline(s) of slack allocated at the very end of the level-0 pel plane so the 32-bit SIMD
+// gathers (FlowInter / flowFetch) can over-read up to 3 bytes past the last pixel without leaving the
+// allocation. It is invisible to the layout: added to the frame height when the plane is created
+// (CopyAndPadPlane) and subtracted back out wherever the height is read to reconstruct nPaddedHeight
+// (FromExternalPlane / FromExternalPelPlanes). Only level 0 carries it (only level 0 is gathered).
+static constexpr int kLevel0GatherGuardLines = 1;
+
 void GetHVPairArgument(int &h, int &v, const char *name, int defaultH, int defaultV, const VSMap *in, const VSAPI *vsapi) {
     int err;
     int numElems = vsapi->mapNumElements(in, name);
@@ -86,7 +93,7 @@ void PyramidPlane::CopyAndPadPlane(const VSFrame *src, int plane, int hPad, int 
     nHPaddingPel = nHPadding;
     nVPaddingPel = nVPadding;
 
-    VSFrame *dst = vsapi->newVideoFrame(&dstFormat, nPaddedWidth, nPaddedHeight * nPel * nPel, nullptr, core);
+    VSFrame *dst = vsapi->newVideoFrame(&dstFormat, nPaddedWidth, nPaddedHeight * nPel * nPel + kLevel0GatherGuardLines, nullptr, core);
     storage = dst;
     nPitch = vsapi->getStride(dst, 0);
     subPelPlaneOffset = nPitch * nPaddedHeight;
@@ -736,7 +743,7 @@ void PyramidPlane::PadPlaneData(int plane) noexcept {
     }
 }
 
-void PyramidPlane::FromExternalPlane(const VSFrame *planeFrame, int hPad, int vPad, const VSAPI *vsapi) noexcept {
+void PyramidPlane::FromExternalPlane(const VSFrame *planeFrame, int hPad, int vPad, int tailGuardLines, const VSAPI *vsapi) noexcept {
     const VSVideoFormat *format = vsapi->getVideoFrameFormat(planeFrame);
     storage = planeFrame;
     pPlane[0] = vsapi->getReadPtr(planeFrame, 0);
@@ -748,7 +755,8 @@ void PyramidPlane::FromExternalPlane(const VSFrame *planeFrame, int hPad, int vP
     nOffsetPadding = nPitch * nVPadding + nHPadding * format->bytesPerSample;
 
     nPaddedWidth = vsapi->getFrameWidth(planeFrame, 0);
-    nPaddedHeight = vsapi->getFrameHeight(planeFrame, 0);
+    // tailGuardLines is the gather slack (kLevel0GatherGuardLines for the gathered level-0 plane, 0 otherwise).
+    nPaddedHeight = vsapi->getFrameHeight(planeFrame, 0) - tailGuardLines;
 
     nWidth = nPaddedWidth - 2 * nHPadding;
     nHeight = nPaddedHeight - 2 * nVPadding;
@@ -767,7 +775,8 @@ void PyramidPlane::FromExternalPelPlanes(const VSFrame *pelFrame, int pel, int h
     nOffsetPadding = nPitch * nVPadding + nHPadding * format->bytesPerSample;
 
     nPaddedWidth = vsapi->getFrameWidth(pelFrame, 0);
-    nPaddedHeight = vsapi->getFrameHeight(pelFrame, 0) / (pel * pel);
+    // Subtract the gather guard line(s) before splitting the stacked sub-planes (see kLevel0GatherGuardLines).
+    nPaddedHeight = (vsapi->getFrameHeight(pelFrame, 0) - kLevel0GatherGuardLines) / (pel * pel);
 
     nWidth = nPaddedWidth - 2 * nHPadding;
     nHeight = nPaddedHeight - 2 * nVPadding;
@@ -967,7 +976,8 @@ void FramePyramid::LoadFrameData(const VSFrame *srcFrame, int maxLevel, const st
                 if (level == 0 && nPel > 1)
                     pyramidLevels[level].planes[plane].FromExternalPelPlanes(frame, nPel, nHPad[plane], nVPad[plane], vsapi);
                 else
-                    pyramidLevels[level].planes[plane].FromExternalPlane(frame, nHPad[plane], nVPad[plane], vsapi);
+                    // Only level 0 carries the gather guard line(s); deeper levels (ReducePlane) do not.
+                    pyramidLevels[level].planes[plane].FromExternalPlane(frame, nHPad[plane], nVPad[plane], level == 0 ? kLevel0GatherGuardLines : 0, vsapi);
             }
         }
 

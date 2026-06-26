@@ -122,7 +122,7 @@ private:
     template<typename PixelType>
     void SetExternalPelPlanes(const VSFrame *pelFrame, int pel, int plane, VSCore *core, const VSAPI *vsapi);
 
-    void FromExternalPlane(const VSFrame *planeFrame, int hPad, int vPad, const VSAPI *vsapi) noexcept;
+    void FromExternalPlane(const VSFrame *planeFrame, int hPad, int vPad, int tailGuardLines, const VSAPI *vsapi) noexcept;
     void FromExternalPelPlanes(const VSFrame *pelFrame, int pel, int hPad, int vPad, const VSAPI *vsapi);
 
     template<typename PixelType>
