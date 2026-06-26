@@ -204,12 +204,12 @@ static const VSFrame *VS_CC compensateGetFrame(int n, int activationReason, void
                     }
                 } else { // overlap
                     uint8_t *DstTemp[3] = {};
-                    std::unique_ptr<uint8_t[]> DstTempBuffers[3];
+                    std::unique_ptr<uint8_t, decltype(&mvu_aligned_free)> DstTempBuffers[3] = { {nullptr, mvu_aligned_free}, {nullptr, mvu_aligned_free}, {nullptr, mvu_aligned_free} };
 
                     // Allocate buffer for only nBlkSizeY rows instead of full frame height
                     // We'll output finalized rows and reuse the buffer as a sliding window
                     for (int plane = 0; plane < num_planes; plane++) {
-                        DstTempBuffers[plane] = std::make_unique<uint8_t[]>(nBlkSizeY[plane] * dstTempPitch[plane]);
+                        DstTempBuffers[plane] = std::unique_ptr<uint8_t, decltype(&mvu_aligned_free)>(mvu_aligned_malloc<uint8_t>(nBlkSizeY[plane] * dstTempPitch[plane], MVU_MEMORY_ALIGN), mvu_aligned_free);
                         DstTemp[plane] = DstTempBuffers[plane].get();
                     }
 
