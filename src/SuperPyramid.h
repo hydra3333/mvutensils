@@ -42,6 +42,7 @@ public:
     // Both in bytes
     ptrdiff_t nPitch = -1;
     ptrdiff_t nOffsetPadding = -1;
+    ptrdiff_t subPelPlaneOffset = -1; // Only used for pel 2 and 4, the offset between the planes in pPlane[1..3] or pPlane[1..15]
 
     // This is the original width and height, only used when generating planes and invalid when reonstructed from frame properties
     int nRealWidth = -1;
@@ -107,10 +108,10 @@ public:
     }
 
 private:
-    const VSFrame *storage[16] = {};
+    const VSFrame *storage = nullptr;
 
     template<typename PixelType>
-    void CopyAndPadPlane(const VSFrame *src, int plane, int hPad, int vPad, int nBlkSizePadX, int nBlkSizePadY, VSCore *core, const VSAPI *vsapi) noexcept;
+    void CopyAndPadPlane(const VSFrame *src, int plane, int hPad, int vPad, int nBlkSizePadX, int nBlkSizePadY, int nPel, VSCore *core, const VSAPI *vsapi) noexcept;
 
     template<typename PixelType>
     void ReducePlane(const PyramidPlane &src, int xRatioUV, int yRatioUV, RFilterParam rFilter, uint8_t *tempBuffer, VSCore *core, const VSAPI *vsapi) noexcept;
@@ -122,7 +123,7 @@ private:
     void SetExternalPelPlanes(const VSFrame *pelFrame, int pel, int plane, VSCore *core, const VSAPI *vsapi);
 
     void FromExternalPlane(const VSFrame *planeFrame, int hPad, int vPad, const VSAPI *vsapi) noexcept;
-    void FromExternalPelPlanes(const VSFrame *const *planeFrames, int pel, int hPad, int vPad, const VSAPI *vsapi);
+    void FromExternalPelPlanes(const VSFrame *pelFrame, int pel, int hPad, int vPad, const VSAPI *vsapi);
 
     template<typename PixelType>
     void SetExtPel2(const VSFrame *pelFrame, int plane, VSCore *core, const VSAPI *vsapi);
@@ -175,8 +176,14 @@ private:
     const VSAPI *vsapi;
     void FreeFrames() noexcept;
     void LoadFrameData(const VSFrame *srcFrame, int maxLevel, const std::string &prefix);
+    void GeneratePelPlanes(SharpParam sharp, VSCore *core, const VSAPI *vsapi);
+    void SetExternalPelPlanes(const VSFrame *pelFrame, VSCore *core, const VSAPI *vsapi);
+    void SharedInit(const VSFrame *srcFrame, int levels, int nBlkSizeX, int nBlkSizeY, int nOverlapX, int nOverlapY, int hPad, int vPad, RFilterParam rFilter, int pel, VSCore *core, const VSAPI *vsapi);
 public:
-    FramePyramid(const VSFrame *srcFrame, int levels, int nBlkSizeX, int nBlkSizeY, int nOverlapX, int nOverlapY, int hPad, int vPad, RFilterParam rFilter, VSCore *core, const VSAPI *vsapi); // constructor to build from source frames, does not take ownership of srcFrame
+    // Constructor to build from source frame with generated subpel frame, does not take ownership of srcFrame
+    FramePyramid(const VSFrame *srcFrame, int levels, int nBlkSizeX, int nBlkSizeY, int nOverlapX, int nOverlapY, int hPad, int vPad, RFilterParam rFilter, int pel, SharpParam sharp, VSCore *core, const VSAPI *vsapi);
+    // Constructor to build from source frame with supplied subpel frame, does not take ownership of srcFrame
+    FramePyramid(const VSFrame *srcFrame, int levels, int nBlkSizeX, int nBlkSizeY, int nOverlapX, int nOverlapY, int hPad, int vPad, RFilterParam rFilter, int pel, const VSFrame *pelFrame, VSCore *core, const VSAPI *vsapi);
 
     // Constructor to reconstruct from frame properties, takes ownership of srcFrame and free it even if the constructor throws
     // You can pass maxLevel = -1 to load all levels, maxLevel = 0 to load only metadata and no planes, maxLevel > 0 to load that many levels, note that only analyse uses more than 1 level
@@ -186,8 +193,7 @@ public:
     FramePyramid(VSNode *node, const std::string &prefix, const VSAPI *vsapi);
 
     ~FramePyramid();
-    void GeneratePelPlanes(int pel, SharpParam sharp, VSCore *core, const VSAPI *vsapi);
-    void SetExternalPelPlanes(const VSFrame *pelFrame, int pel, VSCore *core, const VSAPI *vsapi);
+
     void ExportFrameData(VSFrame *dst, const std::string &prefix) const noexcept; // Stores all levels as frame properties of the output frame, note that each used plane is stored as a separate property
     const FramePyramidLevel &GetLevel(int level) const noexcept;
     bool IsCompatible(const FramePyramid &other) const noexcept;

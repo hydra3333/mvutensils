@@ -69,7 +69,7 @@ void CheckBlkSize(int nBlkSizeX, int nBlkSizeY, int nOverlapX, int nOverlapY, in
 }
 
 template<typename PixelType>
-void PyramidPlane::CopyAndPadPlane(const VSFrame *src, int plane, int hPad, int vPad, int nBlkSizePadX, int nBlkSizePadY, VSCore *core, const VSAPI *vsapi) noexcept {
+void PyramidPlane::CopyAndPadPlane(const VSFrame *src, int plane, int hPad, int vPad, int nBlkSizePadX, int nBlkSizePadY, int nPel, VSCore *core, const VSAPI *vsapi) noexcept {
     const VSVideoFormat *format = vsapi->getVideoFrameFormat(src);
     VSVideoFormat dstFormat = {};
     vsapi->queryVideoFormat(&dstFormat, cfGray, format->sampleType, format->bitsPerSample, 0, 0, core);
@@ -84,11 +84,11 @@ void PyramidPlane::CopyAndPadPlane(const VSFrame *src, int plane, int hPad, int 
     nVPadding = vPad;
     nHPaddingPel = nHPadding;
     nVPaddingPel = nVPadding;
-    nPel = 1;
 
-    VSFrame *dst = vsapi->newVideoFrame(&dstFormat, nPaddedWidth, nPaddedHeight, nullptr, core);
-    storage[0] = dst;
+    VSFrame *dst = vsapi->newVideoFrame(&dstFormat, nPaddedWidth, nPaddedHeight * nPel * nPel, nullptr, core);
+    storage = dst;
     nPitch = vsapi->getStride(dst, 0);
+    subPelPlaneOffset = nPitch * nPaddedHeight;
     nOffsetPadding = nPitch * nVPadding + nHPadding * sizeof(PixelType);
 
     const PixelType *srcP  = reinterpret_cast<const PixelType *>(vsapi->getReadPtr(src, plane));
@@ -125,7 +125,8 @@ void PyramidPlane::CopyAndPadPlane(const VSFrame *src, int plane, int hPad, int 
         dstP += dstPitch;
     }
 
-    pPlane[0] = vsapi->getReadPtr(storage[0], 0);
+    for (int p = 0; p < nPel * nPel; p++)
+        pPlane[p] = vsapi->getWritePtr(dst, 0) + p * subPelPlaneOffset;
 }
 
 template <typename PixelType>
@@ -274,8 +275,8 @@ void PyramidPlane::ReducePlane(const PyramidPlane &src, int xRatioUV, int yRatio
     nPaddedWidth = nWidth + 2 * nHPadding;
     nPaddedHeight = nHeight + 2 * nVPadding;
 
-    VSFrame *dst = vsapi->newVideoFrame(vsapi->getVideoFrameFormat(src.storage[0]), nPaddedWidth, nPaddedHeight, nullptr, core);
-    storage[0] = dst;
+    VSFrame *dst = vsapi->newVideoFrame(vsapi->getVideoFrameFormat(src.storage), nPaddedWidth, nPaddedHeight, nullptr, core);
+    storage = dst;
     uint8_t *dstP = vsapi->getWritePtr(dst, 0);
     pPlane[0] = dstP;
     nPitch = vsapi->getStride(dst, 0);
@@ -537,8 +538,7 @@ static void Average2(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RESTRICT pS
 
 template<typename PixelType>
 void PyramidPlane::GeneratePelPlanes(int pel, SharpParam sharp, VSCore *core, const VSAPI *vsapi) noexcept {
-    nPel = pel;
-
+    // FIXME, weird types and maybe shouldn't even be a function pointer
     typedef void (*RefineFunction)(uint8_t *pDst, const uint8_t *pSrc, intptr_t nPitch, intptr_t nWidth, intptr_t nHeight, intptr_t bitsPerSample);
 
     RefineFunction refine[3];
@@ -558,14 +558,11 @@ void PyramidPlane::GeneratePelPlanes(int pel, SharpParam sharp, VSCore *core, co
     const uint8_t *src[3] = {};
     uint8_t *dst[3] = {};
 
-    const VSVideoFormat *format = vsapi->getVideoFrameFormat(storage[0]);
+    const VSVideoFormat *format = vsapi->getVideoFrameFormat(storage);
     if (nPel == 2) {
-        for (int i = 0; i < 3; i++) {
-            VSFrame *dstFrame = vsapi->newVideoFrame(format, nPaddedWidth, nPaddedHeight, nullptr, core);
-            storage[i + 1] = dstFrame;
-            dst[i] = vsapi->getWritePtr(dstFrame, 0);
-            pPlane[i + 1] = dst[i];
-        }
+        dst[0] = const_cast<uint8_t *>(pPlane[1]);
+        dst[1] = const_cast<uint8_t *>(pPlane[2]);
+        dst[2] = const_cast<uint8_t *>(pPlane[3]);
         src[0] = src[1] = pPlane[0];
         if (sharp == SharpParam::Bilinear)
             src[2] = pPlane[0];
@@ -576,12 +573,10 @@ void PyramidPlane::GeneratePelPlanes(int pel, SharpParam sharp, VSCore *core, co
             refine[i](dst[i], src[i], nPitch, nPaddedWidth, nPaddedHeight, format->bitsPerSample);
     } else if (nPel == 4) {
         uint8_t *pPlaneW[16] = {};
-        for (int i = 0; i < 15; i++) {
-            VSFrame *dstFrame = vsapi->newVideoFrame(format, nPaddedWidth, nPaddedHeight, nullptr, core);
-            storage[i + 1] = dstFrame;
-            pPlaneW[i + 1] = vsapi->getWritePtr(dstFrame, 0);
-            pPlane[i + 1] = pPlaneW[i + 1];
-        }
+
+        // This cast is allowed since we always assign pPlane[i] with a write pointer when creating the frame in the constructor
+        for (int i = 0; i < 16; i++)
+            pPlaneW[i] = const_cast<uint8_t *>(pPlane[i]);
 
         dst[0] = pPlaneW[2];
         dst[1] = pPlaneW[8];
@@ -622,14 +617,9 @@ void PyramidPlane::SetExtPel2(const VSFrame *pelFrame, int plane, VSCore *core, 
     ptrdiff_t nSrc2xPitch = vsapi->getStride(pelFrame, plane);
 
     PixelType *pp[4] = {};
-    const VSVideoFormat *format = vsapi->getVideoFrameFormat(storage[0]);
-
-    for (int i = 1; i < 4; i++) {
-        VSFrame *dstFrame = vsapi->newVideoFrame(format, nPaddedWidth, nPaddedHeight, nullptr, core);
-        storage[i] = dstFrame;
-        pPlane[i] = vsapi->getWritePtr(dstFrame, 0);
-        pp[i] = reinterpret_cast<PixelType *>(vsapi->getWritePtr(dstFrame, 0));
-    }
+    // This cast is allowed since we always assign pPlane[i] with a write pointer when creating the frame in the constructor
+    for (int i = 1; i < 4; i++)
+        pp[i] = (PixelType *)pPlane[i];
     nSrc2xPitch /= sizeof(PixelType);
     ptrdiff_t nPitchTmp = nPitch / sizeof(PixelType);
 
@@ -661,14 +651,9 @@ void PyramidPlane::SetExtPel4(const VSFrame *pelFrame, int plane, VSCore *core, 
     ptrdiff_t nSrc2xPitch = vsapi->getStride(pelFrame, plane);
 
     PixelType *pp[16] = {};
-    const VSVideoFormat *format = vsapi->getVideoFrameFormat(storage[0]);
-
-    for (int i = 1; i < 16; i++) {
-        VSFrame *dstFrame = vsapi->newVideoFrame(format, nPaddedWidth, nPaddedHeight, nullptr, core);
-        storage[i] = dstFrame;
-        pPlane[i] = vsapi->getWritePtr(dstFrame, 0);
-        pp[i] = reinterpret_cast<PixelType *>(vsapi->getWritePtr(dstFrame, 0));
-    }
+    // This cast is allowed since we always assign pPlane[i] with a write pointer when creating the frame in the constructor
+    for (int i = 1; i < 16; i++)
+        pp[i] = (PixelType *)pPlane[i];
 
     nSrc2xPitch /= sizeof(PixelType);
     ptrdiff_t nPitchTmp = nPitch / sizeof(PixelType);
@@ -707,8 +692,6 @@ void PyramidPlane::SetExtPel4(const VSFrame *pelFrame, int plane, VSCore *core, 
 
 template<typename PixelType>
 void PyramidPlane::SetExternalPelPlanes(const VSFrame *pelFrame, int pel, int plane, VSCore *core, const VSAPI *vsapi) {
-    nPel = pel;
-
     if (nPel == 2) {
         SetExtPel2<PixelType>(pelFrame, plane, core, vsapi);
     } else if (nPel == 4) {
@@ -754,7 +737,7 @@ void PyramidPlane::PadPlaneData(int plane) noexcept {
 
 void PyramidPlane::FromExternalPlane(const VSFrame *planeFrame, int hPad, int vPad, const VSAPI *vsapi) noexcept {
     const VSVideoFormat *format = vsapi->getVideoFrameFormat(planeFrame);
-    storage[0] = planeFrame;
+    storage = planeFrame;
     pPlane[0] = vsapi->getReadPtr(planeFrame, 0);
     nPitch = vsapi->getStride(planeFrame, 0);
     nHPadding = hPad;
@@ -770,11 +753,11 @@ void PyramidPlane::FromExternalPlane(const VSFrame *planeFrame, int hPad, int vP
     nHeight = nPaddedHeight - 2 * nVPadding;
 }
 
-void PyramidPlane::FromExternalPelPlanes(const VSFrame *const *planeFrames, int pel, int hPad, int vPad, const VSAPI *vsapi) {
+void PyramidPlane::FromExternalPelPlanes(const VSFrame *pelFrame, int pel, int hPad, int vPad, const VSAPI *vsapi) {
     assert(pel == 2 || pel == 4);
     nPel = pel;
-    const VSVideoFormat *format = vsapi->getVideoFrameFormat(planeFrames[0]);
-    nPitch = vsapi->getStride(planeFrames[0], 0);
+    const VSVideoFormat *format = vsapi->getVideoFrameFormat(pelFrame);
+    nPitch = vsapi->getStride(pelFrame, 0);
     nHPadding = hPad;
     nVPadding = vPad;
     nHPaddingPel = nHPadding * pel;
@@ -782,19 +765,17 @@ void PyramidPlane::FromExternalPelPlanes(const VSFrame *const *planeFrames, int 
 
     nOffsetPadding = nPitch * nVPadding + nHPadding * format->bytesPerSample;
 
-    nPaddedWidth = vsapi->getFrameWidth(planeFrames[0], 0);
-    nPaddedHeight = vsapi->getFrameHeight(planeFrames[0], 0);
+    nPaddedWidth = vsapi->getFrameWidth(pelFrame, 0);
+    nPaddedHeight = vsapi->getFrameHeight(pelFrame, 0) / (pel * pel);
 
     nWidth = nPaddedWidth - 2 * nHPadding;
     nHeight = nPaddedHeight - 2 * nVPadding;
 
-    for (int i = 0; i < pel * pel; i++) {
-        storage[i] = planeFrames[i];
-        pPlane[i] = vsapi->getReadPtr(planeFrames[i], 0);
-
-        if (!vsh::isSameVideoFormat(format, vsapi->getVideoFrameFormat(planeFrames[i])) || vsapi->getFrameWidth(planeFrames[i], 0) != nPaddedWidth || vsapi->getFrameHeight(planeFrames[i], 0) != nPaddedHeight)
-            throw SuperPyramidError("Inconsistent video format or dimensions in pel frames");
-    }
+    subPelPlaneOffset = nPitch * nPaddedHeight;
+    
+    storage = pelFrame;
+    for (int i = 0; i < pel * pel; i++)
+        pPlane[i] = vsapi->getReadPtr(pelFrame, 0) + i * subPelPlaneOffset;
 }
 
 int GetPyramidLevelForBlockSize(int blkSizeX, int blkSizeY, int overlapX, int overlapY, int levels) {
@@ -809,8 +790,9 @@ int GetPyramidLevelForBlockSize(int blkSizeX, int blkSizeY, int overlapX, int ov
     return level;
 }
 
-FramePyramid::FramePyramid(const VSFrame *srcFrame, int levels, int nBlkSizeX, int nBlkSizeY, int nOverlapX, int nOverlapY, int hPad, int vPad, RFilterParam rFilter, VSCore *core, const VSAPI *vsapi)
-: vsapi(vsapi) {
+void FramePyramid::SharedInit(const VSFrame *srcFrame, int levels, int nBlkSizeX, int nBlkSizeY, int nOverlapX, int nOverlapY, int hPad, int vPad, RFilterParam rFilter, int pel, VSCore *core, const VSAPI *vsapi) {
+    this->vsapi = vsapi;
+
     if (!srcFrame)
         throw SuperPyramidError("Invalid source frame");
     if (levels < 1)
@@ -824,6 +806,7 @@ FramePyramid::FramePyramid(const VSFrame *srcFrame, int levels, int nBlkSizeX, i
     this->nBlkSizeY = nBlkSizeY;
     this->nOverlapX = nOverlapX;
     this->nOverlapY = nOverlapY;
+    nPel = pel;
 
     pyramidLevels.resize(levels);
     nLevels = levels;
@@ -884,21 +867,33 @@ FramePyramid::FramePyramid(const VSFrame *srcFrame, int levels, int nBlkSizeX, i
     }
 
     size_t tempBufferSize = (nWidth[0] * srcFormat->bytesPerSample * 8);
-    std::unique_ptr<uint8_t, decltype(&mvu_aligned_free)> tempBuffer(mvu_aligned_malloc<uint8_t>(tempBufferSize, 32), mvu_aligned_free);
+    std::unique_ptr<uint8_t, decltype(&mvu_aligned_free)> tempBuffer(mvu_aligned_malloc<uint8_t>(tempBufferSize, MVU_MEMORY_ALIGN), mvu_aligned_free);
 
     if (srcFormat->bytesPerSample == 1) {
         for (int plane = 0; plane < (chroma ? 3 : 1); plane++) {
-            pyramidLevels[0].planes[plane].CopyAndPadPlane<uint8_t>(srcFrame, plane, nHPad[plane], nVPad[plane], nWidth[plane] - nRealWidth[plane], nHeight[plane] - nRealHeight[plane], core, vsapi);
+            pyramidLevels[0].planes[plane].CopyAndPadPlane<uint8_t>(srcFrame, plane, nHPad[plane], nVPad[plane], nWidth[plane] - nRealWidth[plane], nHeight[plane] - nRealHeight[plane], nPel, core, vsapi);
             for (int i = 1; i < levels; i++)
                 pyramidLevels[i].planes[plane].ReducePlane<uint8_t>(pyramidLevels[i - 1].planes[plane], xRatioUV, yRatioUV, rFilter, tempBuffer.get(), core, vsapi);
         }
     } else {
         for (int plane = 0; plane < (chroma ? 3 : 1); plane++) {
-            pyramidLevels[0].planes[plane].CopyAndPadPlane<uint16_t>(srcFrame, plane, nHPad[plane], nVPad[plane], nWidth[plane] - nRealWidth[plane], nHeight[plane] - nRealHeight[plane], core, vsapi);
+            pyramidLevels[0].planes[plane].CopyAndPadPlane<uint16_t>(srcFrame, plane, nHPad[plane], nVPad[plane], nWidth[plane] - nRealWidth[plane], nHeight[plane] - nRealHeight[plane], nPel, core, vsapi);
             for (int i = 1; i < levels; i++)
                 pyramidLevels[i].planes[plane].ReducePlane<uint16_t>(pyramidLevels[i - 1].planes[plane], xRatioUV, yRatioUV, rFilter, tempBuffer.get(), core, vsapi);
         }
     }
+}
+
+FramePyramid::FramePyramid(const VSFrame *srcFrame, int levels, int nBlkSizeX, int nBlkSizeY, int nOverlapX, int nOverlapY, int hPad, int vPad, RFilterParam rFilter, int pel, SharpParam sharp, VSCore *core, const VSAPI *vsapi) {
+    SharedInit(srcFrame, levels, nBlkSizeX, nBlkSizeY, nOverlapX, nOverlapY, hPad, vPad, rFilter, pel, core, vsapi);
+    if (pel > 1)
+        GeneratePelPlanes(sharp, core, vsapi);
+}
+
+FramePyramid::FramePyramid(const VSFrame *srcFrame, int levels, int nBlkSizeX, int nBlkSizeY, int nOverlapX, int nOverlapY, int hPad, int vPad, RFilterParam rFilter, int pel, const VSFrame *pelFrame, VSCore *core, const VSAPI *vsapi) {
+    SharedInit(srcFrame, levels, nBlkSizeX, nBlkSizeY, nOverlapX, nOverlapY, hPad, vPad, rFilter, pel, core, vsapi);
+    if (pel > 1)
+        SetExternalPelPlanes(pelFrame, core, vsapi);
 }
 
 void FramePyramid::LoadFrameData(const VSFrame *srcFrame, int maxLevel, const std::string &prefix) {
@@ -962,28 +957,16 @@ void FramePyramid::LoadFrameData(const VSFrame *srcFrame, int maxLevel, const st
 
         pyramidLevels.resize(loadLevels);
 
-        if (nPel > 1 && loadLevels > 0) {
-            std::string propStr = prefix + "SuperLevel0";
-            for (int plane = 0; plane < (chroma ? 3 : 1); plane++) {
-                const VSFrame *pelPlanes[16] = {};
-                int idxOffset = plane * nPel * nPel;
-                for (int i = 0; i < nPel * nPel; i++) {
-                    const VSFrame *frame = vsapi->mapGetFrame(props, propStr.c_str(), idxOffset + i, &err);
-                    if (!frame)
-                        throw SuperPyramidError("Plane data missing in super frame metadata");
-                    pelPlanes[i] = frame;
-                }
-                pyramidLevels[0].planes[plane].FromExternalPelPlanes(pelPlanes, nPel, nHPad[plane], nVPad[plane], vsapi);
-            }
-        }
-
-        for (int level = (nPel > 1) ? 1 : 0; level < loadLevels; level++) {
+        for (int level = 0; level < loadLevels; level++) {
             std::string propStr = prefix + "SuperLevel" + std::to_string(level);
             for (int plane = 0; plane < (chroma ? 3 : 1); plane++) {
                 const VSFrame *frame = vsapi->mapGetFrame(props, propStr.c_str(), plane, &err);
                 if (!frame)
                     throw SuperPyramidError("Plane data missing in super frame metadata");
-                pyramidLevels[level].planes[plane].FromExternalPlane(frame, nHPad[plane], nVPad[plane], vsapi);
+                if (level == 0 && nPel > 1)
+                    pyramidLevels[level].planes[plane].FromExternalPelPlanes(frame, nPel, nHPad[plane], nVPad[plane], vsapi);
+                else
+                    pyramidLevels[level].planes[plane].FromExternalPlane(frame, nHPad[plane], nVPad[plane], vsapi);
             }
         }
 
@@ -1041,11 +1024,8 @@ FramePyramid::FramePyramid(VSNode *node, const std::string &prefix, const VSAPI 
 
 void FramePyramid::FreeFrames() noexcept {
     for (auto &level : pyramidLevels) {
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 16; j++) {
-                vsapi->freeFrame(level.planes[i].storage[j]);
-            }
-        }
+        for (int i = 0; i < 3; i++)
+            vsapi->freeFrame(level.planes[i].storage);
     }
 
     vsapi->freeFrame(serializedData);
@@ -1055,30 +1035,25 @@ FramePyramid::~FramePyramid() {
     FreeFrames();
 }
 
-void FramePyramid::GeneratePelPlanes(int pel, SharpParam sharp, VSCore *core, const VSAPI *vsapi) {
-    if (nPel > 1)
-        throw SuperPyramidError("Pel planes have already been generated");
-    if (pel != 2 && pel != 4)
+void FramePyramid::GeneratePelPlanes(SharpParam sharp, VSCore *core, const VSAPI *vsapi) {
+    if (nPel != 2 && nPel != 4)
         throw SuperPyramidError("Pel value must be 2 or 4");
     if (bitsPerSample == 8) {
         for (int plane = 0; plane < (chroma ? 3 : 1); plane++)
-            pyramidLevels[0].planes[plane].GeneratePelPlanes<uint8_t>(pel, sharp, core, vsapi);
+            pyramidLevels[0].planes[plane].GeneratePelPlanes<uint8_t>(nPel, sharp, core, vsapi);
     } else {
         for (int plane = 0; plane < (chroma ? 3 : 1); plane++)
-            pyramidLevels[0].planes[plane].GeneratePelPlanes<uint16_t>(pel, sharp, core, vsapi);
+            pyramidLevels[0].planes[plane].GeneratePelPlanes<uint16_t>(nPel, sharp, core, vsapi);
     }
-    nPel = pel;
 }
 
-void FramePyramid::SetExternalPelPlanes(const VSFrame *pelFrame, int pel, VSCore *core, const VSAPI *vsapi) {
-    if (nPel != 1)
-        throw SuperPyramidError("Pel planes already set");
-    if (pel != 2 && pel != 4)
-        throw SuperPyramidError("Invalid pel value");
+void FramePyramid::SetExternalPelPlanes(const VSFrame *pelFrame, VSCore *core, const VSAPI *vsapi) {
+    if (nPel != 2 && nPel != 4)
+        throw SuperPyramidError("Pel value must be 2 or 4");
 
-    assert(pyramidLevels[0].planes[0].storage[0]);
+    assert(pyramidLevels[0].planes[0].storage);
 
-    const VSFrame *storageFrame = pyramidLevels[0].planes[0].storage[0];
+    const VSFrame *storageFrame = pyramidLevels[0].planes[0].storage;
 
     const VSVideoFormat *pelFormat = vsapi->getVideoFrameFormat(pelFrame);
     const VSVideoFormat *format = vsapi->getVideoFrameFormat(storageFrame);
@@ -1086,34 +1061,26 @@ void FramePyramid::SetExternalPelPlanes(const VSFrame *pelFrame, int pel, VSCore
     if (!vsh::isSameVideoFormat(pelFormat, format))
         throw SuperPyramidError("Pel frame format does not match source frame format");
 
-    if (vsapi->getFrameWidth(pelFrame, 0) != pyramidLevels[0].planes[0].nRealWidth * pel ||
-        vsapi->getFrameHeight(pelFrame, 0) != pyramidLevels[0].planes[0].nRealHeight * pel)
+    if (vsapi->getFrameWidth(pelFrame, 0) != pyramidLevels[0].planes[0].nRealWidth * nPel ||
+        vsapi->getFrameHeight(pelFrame, 0) != pyramidLevels[0].planes[0].nRealHeight * nPel)
         throw SuperPyramidError("Pel frame dimensions are not a suitable multiple of the source frame dimensions");
 
     if (bitsPerSample == 8) {
         for (int plane = 0; plane < (chroma ? 3 : 1); plane++)
-            pyramidLevels[0].planes[plane].SetExternalPelPlanes<uint8_t>(pelFrame, pel, plane, core, vsapi);
+            pyramidLevels[0].planes[plane].SetExternalPelPlanes<uint8_t>(pelFrame, nPel, plane, core, vsapi);
     } else {
         for (int plane = 0; plane < (chroma ? 3 : 1); plane++)
-            pyramidLevels[0].planes[plane].SetExternalPelPlanes<uint16_t>(pelFrame, pel, plane, core, vsapi);
+            pyramidLevels[0].planes[plane].SetExternalPelPlanes<uint16_t>(pelFrame, nPel, plane, core, vsapi);
     }
-    nPel = pel;
 }
 
 void FramePyramid::ExportFrameData(VSFrame *dst, const std::string &prefix) const noexcept {
     VSMap *props = vsapi->getFramePropertiesRW(dst);
-    for (int plane = 0; plane < (chroma ? 3 : 1); plane++) {
-        assert(pyramidLevels[0].planes[plane].storage[0]);
-        for (int i = 0; i < 16; i++) {
-            if (pyramidLevels[0].planes[plane].storage[i])
-                vsapi->mapSetFrame(props, (prefix + "SuperLevel0").c_str(), pyramidLevels[0].planes[plane].storage[i], maAppend);
-        }
-    }
 
-    for (int level = 1; level < static_cast<int>(pyramidLevels.size()); level++) {
+    for (size_t level = 0; level < pyramidLevels.size(); level++) {
         for (int plane = 0; plane < (chroma ? 3 : 1); plane++) {
-            assert(pyramidLevels[level].planes[plane].storage[0]);
-            vsapi->mapSetFrame(props, (prefix + "SuperLevel" + std::to_string(level)).c_str(), pyramidLevels[level].planes[plane].storage[0], maAppend);
+            assert(pyramidLevels[level].planes[plane].storage);
+            vsapi->mapSetFrame(props, (prefix + "SuperLevel" + std::to_string(level)).c_str(), pyramidLevels[level].planes[plane].storage, maAppend);
         }
     }
 

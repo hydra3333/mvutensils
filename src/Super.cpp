@@ -50,29 +50,31 @@ static const VSFrame *VS_CC superGetFrame(int n, int activationReason, void *ins
         if (d->usePelClip)
             vsapi->requestFrameFilter(n, d->pelclip, frameCtx);
     } else if (activationReason == arAllFramesReady) {
+        VSFrame *dst = nullptr;
         const VSFrame *src = nullptr;
         const VSFrame *srcPel = nullptr;
 
         try {
             src = vsapi->getFrameFilter(n, d->node, frameCtx);
-            FramePyramid pyramid(src, d->nLevels, d->nBlkSizeX, d->nBlkSizeY, d->nOverlapX, d->nOverlapY, d->nHPad, d->nVPad, d->rfilter, core, vsapi);
+            dst = vsapi->copyFrame(src, core);
 
             if (d->usePelClip) {
                 srcPel = vsapi->getFrameFilter(n, d->pelclip, frameCtx);
-                pyramid.SetExternalPelPlanes(srcPel, d->nPel, core, vsapi);
+                FramePyramid pyramid(src, d->nLevels, d->nBlkSizeX, d->nBlkSizeY, d->nOverlapX, d->nOverlapY, d->nHPad, d->nVPad, d->rfilter, d->nPel, srcPel, core, vsapi);
                 vsapi->freeFrame(srcPel);
                 srcPel = nullptr;
-            } else if (d->nPel > 1) {
-                pyramid.GeneratePelPlanes(d->nPel, d->sharp, core, vsapi);
+                pyramid.ExportFrameData(dst, d->prefix);
+            } else {
+                FramePyramid pyramid(src, d->nLevels, d->nBlkSizeX, d->nBlkSizeY, d->nOverlapX, d->nOverlapY, d->nHPad, d->nVPad, d->rfilter, d->nPel, d->sharp, core, vsapi);
+                pyramid.ExportFrameData(dst, d->prefix);
             }
 
-            VSFrame *dst = vsapi->copyFrame(src, core);
             vsapi->freeFrame(src);
             src = nullptr;
-            pyramid.ExportFrameData(dst, d->prefix);
 
             return dst;
         } catch (const std::exception &e) {
+            vsapi->freeFrame(dst);
             vsapi->freeFrame(src);
             vsapi->freeFrame(srcPel);
             vsapi->setFilterError(("Super: " + std::string(e.what())).c_str(), frameCtx);
