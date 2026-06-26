@@ -31,6 +31,8 @@ Changes
     * Frame properties are now consistently propagated, this means that many functions that previously only requested frames from super now also request from the original clip
 
     * The opt argument was dropped from all functions
+    
+    * More optimized code path, avx2 and avx512 available in most places where it makes sense
 
 * Super:
     * Now takes blksize=[h, v], overlap=[h, v] values to properly pad the source frame so the edges also are processed and not generate excessive levels that are unused
@@ -142,6 +144,6 @@ Planned changes/mysteries
 
 * The levels argument to Super and Analyse should probably be reworked somehow
 
-* The tff stuff present in most filters needs cleanup
-
 * Mask doesn't need source properties passed on or the possibility to specify the output format?
+
+* Document everything properly, especially the fact that only Analyse cares about levels>1 in Super
