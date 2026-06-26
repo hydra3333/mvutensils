@@ -74,6 +74,7 @@ void PyramidPlane::CopyAndPadPlane(const VSFrame *src, int plane, int hPad, int 
     VSVideoFormat dstFormat = {};
     vsapi->queryVideoFormat(&dstFormat, cfGray, format->sampleType, format->bitsPerSample, 0, 0, core);
     
+    this->nPel = nPel;
     nRealWidth = vsapi->getFrameWidth(src, plane);
     nRealHeight = vsapi->getFrameHeight(src, plane);
     nWidth = nRealWidth + nBlkSizePadX;
