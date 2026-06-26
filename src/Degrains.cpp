@@ -174,7 +174,6 @@ static const VSFrame *VS_CC degrainGetFrame(int n, int activationReason, void *i
             const int *nBlkSizeX = d->nBlkSizeX;
             const int *nBlkSizeY = d->nBlkSizeY;
             const int *nWidth_B = d->nWidth_B;
-            const int *nHeight_B = d->nHeight_B;
             const int64_t *thSAD = d->thSAD;
             const int *nLimit = d->nLimit;
 
@@ -300,8 +299,6 @@ static const VSFrame *VS_CC degrainGetFrame(int n, int activationReason, void *i
                         int rowsToOutput = (by == nBlkY - 1) ? nBlkSizeY[plane] : stepY;
                         int outputHeight = std::min(rowsToOutput, vsapi->getFrameHeight(dst, plane) - by * stepY);
                         int outputWidth = std::min(nWidth_B[plane], vsapi->getFrameWidth(dst, plane));
-
-
 
                         if (outputHeight > 0)
                             ToPixels<PixelType>(pDstCur[plane], nDstPitches[plane], DstTemp, dstTempPitch,
