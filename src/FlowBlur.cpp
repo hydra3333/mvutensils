@@ -94,7 +94,7 @@ static void FlowBlur(uint8_t * MVU_RESTRICT pdst8, ptrdiff_t dst_pitch, const Py
                 continue;
             }
             int xBase = (w + dstX) << nPelLog;
-            int64_t blurredsum = prefPtr[w];
+            std::conditional_t<std::is_integral_v<PixelType>, int64_t, double> blurredsum = prefPtr[w];
             int mF = (aF / prec) >> 8;
             if (mF > 0) {
                 vxF0 /= mF;
@@ -102,8 +102,7 @@ static void FlowBlur(uint8_t * MVU_RESTRICT pdst8, ptrdiff_t dst_pitch, const Py
                 int vxF = vxF0;
                 int vyF = vyF0;
                 for (int i = 0; i < mF; i++) {
-                    int dstF = *reinterpret_cast<const PixelType *>(pref.GetPointer<PixelType>((vxF >> 8) + xBase, (vyF >> 8) + yBase));
-                    blurredsum += dstF;
+                    blurredsum += *reinterpret_cast<const PixelType *>(pref.GetPointer<PixelType>((vxF >> 8) + xBase, (vyF >> 8) + yBase));
                     vxF += vxF0;
                     vyF += vyF0;
                 }
@@ -115,8 +114,7 @@ static void FlowBlur(uint8_t * MVU_RESTRICT pdst8, ptrdiff_t dst_pitch, const Py
                 int vxB = vxB0;
                 int vyB = vyB0;
                 for (int i = 0; i < mB; i++) {
-                    int dstB = *reinterpret_cast<const PixelType *>(pref.GetPointer<PixelType>((vxB >> 8) + xBase, (vyB >> 8) + yBase));
-                    blurredsum += dstB;
+                    blurredsum += *reinterpret_cast<const PixelType *>(pref.GetPointer<PixelType>((vxB >> 8) + xBase, (vyB >> 8) + yBase));
                     vxB += vxB0;
                     vyB += vyB0;
                 }
@@ -305,7 +303,11 @@ static void VS_CC flowblurCreate(const VSMap *in, VSMap *out, [[maybe_unused]] v
         {d->mvfw, rpGeneral}, 
     };
 
-    vsapi->createVideoFilter(out, "FlowBlur", d->vi, (d->vi->format.bitsPerSample == 8) ? flowblurGetFrame<uint8_t> : flowblurGetFrame<uint16_t>, filterFree<FlowBlurData>, fmParallel, deps, ARRAY_SIZE(deps), d.get(), core);
+    auto getFilterFn = d->vi->format.bytesPerSample == 1 ? flowblurGetFrame<uint8_t> : flowblurGetFrame<uint16_t>;
+    if (d->vi->format.bytesPerSample == 4)
+        getFilterFn = flowblurGetFrame<float>;
+
+    vsapi->createVideoFilter(out, "FlowBlur", d->vi, getFilterFn, filterFree<FlowBlurData>, fmParallel, deps, ARRAY_SIZE(deps), d.get(), core);
     d.release();
 }
 
