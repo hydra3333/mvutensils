@@ -212,7 +212,7 @@ static void RB2Cubic(uint8_t *pDst, const uint8_t *pSrc, ptrdiff_t nDstPitch,
     nDstPitch /= sizeof(PixelType);
     nSrcPitch /= sizeof(PixelType);
 
-    typedef typename std::conditional_t<std::is_integral_v<PixelType>, int, float> TempStorage;
+    using TempStorage = std::conditional_t<std::is_integral_v<PixelType>, int, float>;
 
     const int srcWidth2 = nWidth * 2;
 
@@ -374,7 +374,7 @@ static void VerticalWiener(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RESTR
 
     nPitch /= sizeof(PixelType);
 
-    typedef typename std::conditional_t<std::is_integral_v<PixelType>, int, float> TempStorage;
+    using TempStorage = std::conditional_t<std::is_integral_v<PixelType>, int, float>;
 
     int pixelMax = PixelMaxValue<PixelType>(bitsPerSample);
 
@@ -428,7 +428,7 @@ static void HorizontalWiener(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RES
 
     nPitch /= sizeof(PixelType);
 
-    typedef typename std::conditional_t<std::is_integral_v<PixelType>, int, float> TempStorage;
+    using TempStorage = std::conditional_t<std::is_integral_v<PixelType>, int, float>;
 
     int pixelMax = PixelMaxValue<PixelType>(bitsPerSample);
 

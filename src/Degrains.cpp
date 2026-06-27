@@ -289,7 +289,9 @@ static const VSFrame *VS_CC degrainGetFrame(int n, int activationReason, void *i
                             d->DEGRAIN[plane](tmpBlock, tmpBlockPitch, pSrcCur[plane] + xx, nSrcPitches[plane],
                                 pointers, strides,
                                 WSrc, WRefs);
-                            d->OVERS[plane](DstTemp + xx * 2, dstTempPitch, tmpBlock, tmpBlockPitch, winOver, nBlkSizeX[plane]);
+                            // accumulator is 1x pixel width for float, 2x for 8/16-bit integer.
+                            constexpr int accRatio = std::is_floating_point_v<PixelType> ? 1 : 2;
+                            d->OVERS[plane](DstTemp + xx * accRatio, dstTempPitch, tmpBlock, tmpBlockPitch, winOver, nBlkSizeX[plane]);
 
                             xx += (nBlkSizeX[plane] - nOverlapX[plane]) * bytesPerSample;
                             wbx = 1;
@@ -313,7 +315,7 @@ static const VSFrame *VS_CC degrainGetFrame(int n, int activationReason, void *i
                     }
                 }
 
-                int pixelMax = (1 << bitsPerSample) - 1;
+                int pixelMax = PixelMaxValue<PixelType>(bitsPerSample); // 0 for float -> limit disabled (avoids 1<<32 UB)
                 if (nLimit[plane] < pixelMax)
                     LimitChanges_C<PixelType>(pDst[plane], nDstPitches[plane],
                         pSrc[plane], nSrcPitches[plane],
@@ -342,16 +344,19 @@ static const VSFrame *VS_CC degrainGetFrame(int n, int activationReason, void *i
 #if defined(MVTOOLS_X86)
 #define DEGRAIN(radius, width, height) \
     { KEY(width, height, 8), Degrain_sse2<radius, width, height> }, \
-    { KEY(width, height, 16), Degrain_C16<radius, width, height> },
+    { KEY(width, height, 16), Degrain_C16<radius, width, height> }, \
+    { KEY(width, height, 32), Degrain_F32<radius, width, height> },
 #else
 #define DEGRAIN(radius, width, height) \
     { KEY(width, height, 8), Degrain_C8<radius, width, height> }, \
-    { KEY(width, height, 16), Degrain_C16<radius, width, height> },
+    { KEY(width, height, 16), Degrain_C16<radius, width, height> }, \
+    { KEY(width, height, 32), Degrain_F32<radius, width, height> },
 #endif
 
 #define DEGRAIN_C(radius, width, height) \
     { KEY(width, height, 8), Degrain_C8<radius, width, height> }, \
-    { KEY(width, height, 16), Degrain_C16<radius, width, height> },
+    { KEY(width, height, 16), Degrain_C16<radius, width, height> }, \
+    { KEY(width, height, 32), Degrain_F32<radius, width, height> },
 
 #define DEGRAIN_LEVEL(radius)\
     {\
@@ -530,7 +535,7 @@ static void VS_CC degrainCreate(const VSMap *in, VSMap *out, [[maybe_unused]] vo
             throw std::runtime_error("with this block size and video format, thsad" + std::string(c ? "c" : "") + " must not exceed " + std::to_string(maximum) + " or some calculations would overflow");
         }
 
-        int pixelMax = (1 << d->vi->format.bitsPerSample) - 1;
+        int pixelMax = (d->vi->format.bytesPerSample == 4) ? 0 : (1 << d->vi->format.bitsPerSample) - 1; // 0 for float (limit disabled; avoids 1<<32 UB)
 
         GetHVPairArgument(d->nLimit[0], d->nLimit[1], "limit", pixelMax, pixelMax, in, vsapi);
 
@@ -539,7 +544,8 @@ static void VS_CC degrainCreate(const VSMap *in, VSMap *out, [[maybe_unused]] vo
         if (d->nLimit[0] < 0 || d->nLimit[0] > pixelMax || d->nLimit[1] < 0 || d->nLimit[1] > pixelMax)
             throw std::runtime_error("limit must be between 0 and " + std::to_string(pixelMax));
 
-        d->dstTempPitch = ((vectors[0]->nWidth + 15) / 16) * 16 * d->vi->format.bytesPerSample * 2;
+        // accumulator is 1x pixel width for float (bytesPerSample 4), 2x for 8/16-bit integer.
+        d->dstTempPitch = ((vectors[0]->nWidth + 15) / 16) * 16 * d->vi->format.bytesPerSample * (d->vi->format.bytesPerSample == 4 ? 1 : 2);
 
         d->xSubUV = d->vi->format.subSamplingW;
         d->ySubUV = d->vi->format.subSamplingH;
@@ -589,7 +595,11 @@ static void VS_CC degrainCreate(const VSMap *in, VSMap *out, [[maybe_unused]] vo
 
         assert(numDeps == deps.size());
 
-        vsapi->createVideoFilter(out, d->filterName.c_str(), d->vi, (d->vi->format.bytesPerSample == 1) ? degrainGetFrame<radius, uint8_t> : degrainGetFrame<radius, uint16_t>, filterFree<DegrainData<radius>>, fmParallel, deps.data(), numDeps, d.get(), core);
+        auto getFilterFn = d->vi->format.bytesPerSample == 1 ? degrainGetFrame<radius, uint8_t> : degrainGetFrame<radius, uint16_t>;
+        if (d->vi->format.bytesPerSample == 4)
+            getFilterFn = degrainGetFrame<radius, float>;
+
+        vsapi->createVideoFilter(out, d->filterName.c_str(), d->vi, getFilterFn, filterFree<DegrainData<radius>>, fmParallel, deps.data(), numDeps, d.get(), core);
         d.release();
 
     } catch (const std::exception &e) {

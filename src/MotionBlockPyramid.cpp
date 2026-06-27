@@ -1468,7 +1468,7 @@ void MotionBlockPyramid::LoadFrameData(const VSFrame *srcFrame, int maxLevel, co
     if (xRatioUV < 1 || yRatioUV < 1 || xRatioUV > 2 || yRatioUV > 2 || nRealWidth > nWidth || nRealHeight > nHeight || nVPadding < 0 || nHPadding < 0
         || nRealHeight < 1 || nRealWidth < 1 || nBlkSizeX < 2 || nBlkSizeY < 2 || nOverlapX < 0 || nOverlapY < 0
         || nOverlapX > nBlkSizeX / 2 || nOverlapY > nBlkSizeY / 2 || nLevelCount < 1 || (nPel != 1 && nPel != 2 && nPel != 4)
-        || bitsPerSample < 8 || bitsPerSample > 16)
+        || bitsPerSample < 8 || (bitsPerSample > 16 && bitsPerSample != 32))
         return;
 
     std::string vectorsProp = prefix + "AnalysisVectors";

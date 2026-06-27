@@ -87,6 +87,35 @@ static void Degrain_C16(uint8_t * MVU_RESTRICT pDst8, ptrdiff_t nDstPitch, const
     }
 }
 
+template <int radius, int blockWidth, int blockHeight>
+static void Degrain_F32(uint8_t *MVU_RESTRICT pDst8, ptrdiff_t nDstPitch, const uint8_t *MVU_RESTRICT pSrc8, ptrdiff_t nSrcPitch, const uint8_t **MVU_RESTRICT pRefs8, const ptrdiff_t *MVU_RESTRICT nRefPitches, uint16_t WSrc, const uint16_t *MVU_RESTRICT WRefs) noexcept {
+    const float wsrc = WSrc;
+    float wref[radius * 2];
+    for (int r = 0; r < radius * 2; r++)
+        wref[r] = WRefs[r];
+
+    for (int y = 0; y < blockHeight; y++) {
+        for (int x = 0; x < blockWidth; x++) {
+            const float *pSrc = (const float * __restrict)pSrc8;
+            float *pDst = (float * __restrict)pDst8;
+
+            float sum = pSrc[x] * wsrc;
+
+            for (int r = 0; r < radius * 2; r++) {
+                const float *pRef = (const float * __restrict)pRefs8[r];
+                sum += pRef[x] * wref[r];
+            }
+
+            pDst[x] = sum / 256.0f;
+        }
+
+        pDst8 += nDstPitch;
+        pSrc8 += nSrcPitch;
+        for (int r = 0; r < radius * 2; r++)
+            pRefs8[r] += nRefPitches[r];
+    }
+}
+
 
 #ifdef MVTOOLS_X86
 #include <emmintrin.h>
@@ -172,19 +201,30 @@ static void Degrain_sse2(uint8_t * MVU_RESTRICT pDst, ptrdiff_t nDstPitch, const
 template <typename PixelType>
 static void LimitChanges_C(uint8_t * MVU_RESTRICT pDst8, ptrdiff_t nDstPitch, const uint8_t * MVU_RESTRICT pSrc8, ptrdiff_t nSrcPitch, int nWidth, int nHeight, int nLimit) noexcept {
     const PixelType lim = (PixelType)nLimit;
-    const PixelType maxValue = (PixelType)~(PixelType)0; // 255 or 65535
-    for (int h = 0; h < nHeight; h++) {
-        const PixelType *pSrc = (const PixelType *)pSrc8;
-        PixelType *pDst = (PixelType *)pDst8;
-        for (int i = 0; i < nWidth; i++) {
-            PixelType s = pSrc[i], d = pDst[i];
-            PixelType lo = (PixelType)(s - lim); if (lo > s) lo = 0;        // max(s - lim, 0)
-            PixelType hi = (PixelType)(s + lim); if (hi < s) hi = maxValue; // min(s + lim, typeMax)
-            PixelType r = d < lo ? lo : d;                                  // max(d, lo)
-            pDst[i] = r > hi ? hi : r;                                      // min(., hi)
+    if constexpr (std::is_integral_v<PixelType>) {
+        const PixelType maxValue = (PixelType)~(PixelType)0; // 255 or 65535
+        for (int h = 0; h < nHeight; h++) {
+            const PixelType *pSrc = (const PixelType *)pSrc8;
+            PixelType *pDst = (PixelType *)pDst8;
+            for (int i = 0; i < nWidth; i++) {
+                PixelType s = pSrc[i], d = pDst[i];
+                PixelType lo = (PixelType)(s - lim); if (lo > s) lo = 0;        // max(s - lim, 0)
+                PixelType hi = (PixelType)(s + lim); if (hi < s) hi = maxValue; // min(s + lim, typeMax)
+                PixelType r = d < lo ? lo : d;                                  // max(d, lo)
+                pDst[i] = r > hi ? hi : r;                                      // min(., hi)
+            }
+            pDst8 += nDstPitch;
+            pSrc8 += nSrcPitch;
         }
-        pDst8 += nDstPitch;
-        pSrc8 += nSrcPitch;
+    } else {
+        for (int h = 0; h < nHeight; h++) {
+            const PixelType *pSrc = (const PixelType *)pSrc8;
+            PixelType *pDst = (PixelType *)pDst8;
+            for (int i = 0; i < nWidth; i++)
+                pDst[i] = std::clamp(pDst[i], pSrc[i] - lim, pSrc[i] + lim);
+            pDst8 += nDstPitch;
+            pSrc8 += nSrcPitch;
+        }
     }
 }
 

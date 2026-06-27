@@ -49,15 +49,17 @@ typedef void (*OverlapsFunction)(uint8_t *pDst, ptrdiff_t nDstPitch,
 
 template <typename PixelType>
 static void ToPixels(uint8_t * MVU_RESTRICT pDst8, ptrdiff_t nDstPitch, const uint8_t * MVU_RESTRICT pSrc8, ptrdiff_t nSrcPitch, int nWidth, int nHeight, int bitsPerSample) {
-    using Acc = std::conditional_t<sizeof(PixelType) == 1, uint16_t, uint32_t>;
-    const Acc clampMax = sizeof(PixelType) == 1 ? (Acc)0xFF : (Acc)((1u << bitsPerSample) - 1);
+    // float pixels accumulate in float (1x width); 8/16-bit accumulate in a 2x-width integer.
+    using Acc = std::conditional_t<std::is_floating_point_v<PixelType>, float, std::conditional_t<sizeof(PixelType) == 1, uint16_t, uint32_t>>;
+    // clampMax is int to match ClampIntToRange's int maxVal (no float->int / sign conversion); value always fits.
+    const int clampMax = sizeof(PixelType) == 1 ? 0xFF : PixelMaxValue<Acc>(bitsPerSample);
 
     for (int h = 0; h < nHeight; h++) {
         const Acc *pSrc = (const Acc *)pSrc8;
         PixelType *pDst = (PixelType *)pDst8;
         for (int i = 0; i < nWidth; i++) {
-            Acc a = (Acc)(pSrc[i] + 16) >> 5;
-            pDst[i] = (PixelType)(a < clampMax ? a : clampMax);
+            Acc a = (Acc)ShiftDivide<5, 16>(pSrc[i]);
+            pDst[i] = (PixelType)ClampIntToRange(a, clampMax);
         }
         pDst8 += nDstPitch;
         pSrc8 += nSrcPitch;

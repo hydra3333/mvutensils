@@ -120,7 +120,7 @@ void overlaps_c(uint8_t * MVU_RESTRICT pDst8, ptrdiff_t nDstPitch, const uint8_t
             PixelType2 *pDst = (PixelType2 *)pDst8;
             const PixelType *pSrc = (const PixelType *)pSrc8;
 
-            pDst[i] += ((pSrc[i] * pWin[i]) >> 6);
+            pDst[i] += ShiftDivide<6, 0>(pSrc[i] * pWin[i]);
         }
         pDst8 += nDstPitch;
         pSrc8 += nSrcPitch;
@@ -250,16 +250,19 @@ struct OverlapsWrapper16<4, blockHeight> {
 #if defined(MVTOOLS_X86)
 #define OVERS(width, height) \
     { KEY(width, height, 8), OverlapsWrapper<width, height>::overlaps_sse2 }, \
-    { KEY(width, height, 16), OverlapsWrapper16<width, height>::overlaps_sse2 },
+    { KEY(width, height, 16), OverlapsWrapper16<width, height>::overlaps_sse2 }, \
+    { KEY(width, height, 32), overlaps_c<width, height, float, float> },
 #else
 #define OVERS(width, height) \
     { KEY(width, height, 8), overlaps_c<width, height, uint16_t, uint8_t> }, \
-    { KEY(width, height, 16), overlaps_c<width, height, uint32_t, uint16_t> },
+    { KEY(width, height, 16), overlaps_c<width, height, uint32_t, uint16_t> }, \
+    { KEY(width, height, 32), overlaps_c<width, height, float, float> },
 #endif
 
 #define OVERS_C(width, height) \
     { KEY(width, height, 8), overlaps_c<width, height, uint16_t, uint8_t> }, \
-    { KEY(width, height, 16), overlaps_c<width, height, uint32_t, uint16_t> },
+    { KEY(width, height, 16), overlaps_c<width, height, uint32_t, uint16_t> }, \
+    { KEY(width, height, 32), overlaps_c<width, height, float, float> },
 
 static const std::unordered_map<uint32_t, OverlapsFunction> overlaps_functions = {
     OVERS_C(2, 2)

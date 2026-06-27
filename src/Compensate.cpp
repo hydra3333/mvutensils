@@ -250,7 +250,7 @@ static const VSFrame *VS_CC compensateGetFrame(int n, int activationReason, void
                             bly[1] = bly[2] = bly[0] >> ySubUV;
 
                             for (int plane = 0; plane < num_planes; plane++) {
-                                d->OVERS[plane](DstTemp[plane] + xx[plane] * 2, dstTempPitch[plane], pPlanes[plane].GetPointer<PixelType>(blx[plane], bly[plane]), pPlanes[plane].nPitch, winOver[plane], nBlkSizeX[plane]);
+                                d->OVERS[plane](DstTemp[plane] + xx[plane] * (std::is_integral_v<PixelType> ? 2 : 1), dstTempPitch[plane], pPlanes[plane].GetPointer<PixelType>(blx[plane], bly[plane]), pPlanes[plane].nPitch, winOver[plane], nBlkSizeX[plane]);
                                 xx[plane] += (nBlkSizeX[plane] - nOverlapX[plane]) * sizeof(PixelType);
                             }
                             wbx = 1;
@@ -356,8 +356,10 @@ static void VS_CC compensateCreate(const VSMap *in, VSMap *out, [[maybe_unused]]
 
         d->thSAD = d->thSAD * d->nSCD1 / nSCD1_old;
 
-        d->dstTempPitch = ((vectors.nWidth + 15) / 16) * 16 * d->vi->format.bytesPerSample * 2;
-        d->dstTempPitchUV = (((vectors.nWidth / vectors.xRatioUV) + 15) / 16) * 16 * d->vi->format.bytesPerSample * 2;
+        // accumulator is 1x pixel width for float (bytesPerSample 4), 2x for 8/16-bit integer.
+        const int accRatio = d->vi->format.bytesPerSample == 4 ? 1 : 2;
+        d->dstTempPitch = ((vectors.nWidth + 15) / 16) * 16 * d->vi->format.bytesPerSample * accRatio;
+        d->dstTempPitchUV = (((vectors.nWidth / vectors.xRatioUV) + 15) / 16) * 16 * d->vi->format.bytesPerSample * accRatio;
 
         d->supervi = vsapi->getVideoInfo(d->super);
 
@@ -393,7 +395,10 @@ static void VS_CC compensateCreate(const VSMap *in, VSMap *out, [[maybe_unused]]
         {d->vectors, rpNoFrameReuse},
     };
 
-    vsapi->createVideoFilter(out, "Compensate", d->vi, d->vi->format.bytesPerSample == 1 ? compensateGetFrame<uint8_t> : compensateGetFrame<uint16_t>, filterFree<CompensateData>, fmParallel, deps, ARRAY_SIZE(deps), d.get(), core);
+    auto getFilterFn = d->vi->format.bytesPerSample == 1 ? compensateGetFrame<uint8_t> : compensateGetFrame<uint16_t>;
+    if (d->vi->format.bytesPerSample == 4)
+        getFilterFn = compensateGetFrame<float>;
+    vsapi->createVideoFilter(out, "Compensate", d->vi, getFilterFn, filterFree<CompensateData>, fmParallel, deps, ARRAY_SIZE(deps), d.get(), core);
     d.release();
 }
 

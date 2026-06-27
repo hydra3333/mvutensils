@@ -136,7 +136,7 @@ static constexpr PixelType AveragePixels(PixelType p1, PixelType p2, PixelType p
 template <typename T>
 static constexpr T ClampIntToRange(T p, int maxVal) noexcept {
     if constexpr (std::is_integral_v<T>)
-        return std::clamp(p, 0, maxVal);
+        return std::clamp<T>(p, 0, maxVal);
     else
         return p;
 }
