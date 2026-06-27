@@ -399,6 +399,8 @@ static DenoiseFunction selectDegrainFunction(unsigned radius, unsigned width, un
 #if defined(MVTOOLS_X86)
     if (g_cpuinfo & MVU_CPU_AVX2)
         selectDegrainFunctionAVX2(radius, width, height, bits, degrain);
+    if (g_cpuinfo & MVU_CPU_AVX512_BASE)
+        selectDegrainFunctionAVX512(radius, width, height, bits, degrain); // overrides AVX2 for big blocks (~2x)
 #endif
 
     return degrain;
