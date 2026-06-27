@@ -43,7 +43,4 @@ void selectSADFunctionAVX2(unsigned width, unsigned height, unsigned bits, SADFu
 void selectSATDFunctionAVX2(unsigned width, unsigned height, unsigned bits, SADFunction &satd);
 void selectSADFunctionAVX512(unsigned width, unsigned height, unsigned bits, SADFunction &sad);
 void selectSATDFunctionAVX512(unsigned width, unsigned height, unsigned bits, SADFunction &satd);
-// Float SATD per-ISA auto-vec overrides (pure scalar C compiled wider; bits implicitly 32).
-void selectSATDFunctionFloatAVX2(unsigned width, unsigned height, SADFunction &satd);
-void selectSATDFunctionFloatAVX512(unsigned width, unsigned height, SADFunction &satd);
 #endif

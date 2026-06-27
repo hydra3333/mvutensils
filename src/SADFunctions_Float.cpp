@@ -34,9 +34,8 @@ void selectSADFunctionFloat(unsigned width, unsigned height, SADFunction &sad) {
 
 
 // ===================== Float SATD (pure scalar, auto-vectorized) =====================
-// Kernel is satd_f32_c<W,H> in SADFunctions_Float.h; this baseline TU (fast-math) instantiates it at
-// SSE2. Per-ISA AVX2/AVX-512 auto-vec overrides live in SADFunctions_Float_AVX{2,512}.cpp where they
-// beat the SSE2 build (see selectSATDFunction dispatch).
+// Kernel is satd_f32_c<W,H> in SADFunctions_Float.h; this fast-math TU instantiates it at the SSE2
+// baseline. There are no per-ISA (AVX2/AVX-512) float SATD overrides -- this is the only float SATD path.
 #define SATD_F32(width, height) { KEY(width, height, 32), satd_f32_c<width, height> },
 
 // Same block-size set as the integer SATD map.

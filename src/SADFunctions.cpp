@@ -601,17 +601,11 @@ static const std::unordered_map<uint32_t, SADFunction> satd_functions = {
 };
 
 SADFunction selectSATDFunction(unsigned width, unsigned height, unsigned bits) {
-    // 32-bit float pixels: scalar SATD baseline + per-ISA auto-vec overrides (AVX2 all sizes ~1.3-1.4x,
-    // AVX-512 width>=16 up to ~2.6x further). The result is 16-bit-scaled internally.
+    // 32-bit float pixels: pure scalar SATD (auto-vectorized at the baseline ISA), no per-ISA overrides.
+    // The result is 16-bit-scaled internally.
     if (bits == 32) {
         SADFunction satd = nullptr;
         selectSATDFunctionFloat(width, height, satd);
-#if defined(MVTOOLS_X86)
-        if (g_cpuinfo & MVU_CPU_AVX2)
-            selectSATDFunctionFloatAVX2(width, height, satd);
-        if (g_cpuinfo & MVU_CPU_AVX512_BASE)
-            selectSATDFunctionFloatAVX512(width, height, satd);
-#endif
         return satd;
     }
 
