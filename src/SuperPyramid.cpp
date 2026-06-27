@@ -945,7 +945,7 @@ void FramePyramid::LoadFrameData(const VSFrame *srcFrame, int maxLevel, const st
 
     if (xRatioUV < 1 || yRatioUV < 1 || xRatioUV > 2 || yRatioUV > 2 || nRealWidth[0] > nWidth[0] || nRealHeight[0] > nHeight[0]
         || nVPad[0] < 0 || nHPad[0] < 0 || nRealHeight[0] < 1 || nRealWidth[0] < 1 || nLevels < 1 || (nPel != 1 && nPel != 2 && nPel != 4)
-        || bitsPerSample < 8 || bitsPerSample > 16)
+        || bitsPerSample < 8 || (bitsPerSample > 16 && bitsPerSample != 32))
         throw SuperPyramidError("Invalid super frame metadata");
 
     if (chroma) {

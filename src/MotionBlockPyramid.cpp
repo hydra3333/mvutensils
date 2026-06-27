@@ -408,7 +408,8 @@ void MotionBlockLevel::Initialize(int _nBlkX, int _nBlkY, int _nBlkSizeX, int _n
 
     vectors.resize(nBlkCount);
 
-    verybigSAD = nBlkSizeX * nBlkSizeY * (1 << bitsPerSample);
+    // float SAD is mapped to the 16-bit scale, so cap the shift at 16 (also avoids 1<<32 UB for float).
+    verybigSAD = (int64_t)nBlkSizeX * nBlkSizeY * (1 << std::min(16, bitsPerSample));
 }
 
 MotionBlockLevel::~MotionBlockLevel() {
@@ -1552,7 +1553,7 @@ void MotionBlockPyramid::SearchMVs(const FramePyramid &pSrcGOF, const FramePyram
     if (!global)
         pglobal = pzero;
 
-    int bytesPerSample = (pSrcGOF.bitsPerSample == 8) ? 1 : 2;
+    int bytesPerSample = pSrcGOF.bitsPerSample == 8 ? 1 : (pSrcGOF.bitsPerSample == 32 ? 4 : 2);
 
     // Search the motion vectors, for the low details interpolations first
     SearchType searchTypeSmallest = (nLevelCount == 1 || searchType == SearchType::Horizontal || searchType == SearchType::Vertical) ? searchType : SearchType::Exhaustive; // full search for smallest coarse plane
@@ -1599,7 +1600,7 @@ void MotionBlockPyramid::RecalculateMVs(const FramePyramid &pSrcGOF, const Frame
     if (!pSrcGOF.IsCompatible(pRefGOF))
         throw MotionBlockPyramidError("The two reference frames don't have the same format");
 
-    int bytesPerSample = (pSrcGOF.bitsPerSample == 8) ? 1 : 2;
+    int bytesPerSample = pSrcGOF.bitsPerSample == 8 ? 1 : (pSrcGOF.bitsPerSample == 32 ? 4 : 2);
 
     pyramidLevels[0].RecalculateMVs(pSrcGOF.GetLevel(0), pRefGOF.GetLevel(0),
         nBlkSizeX, nBlkSizeY, nOverlapX, nOverlapY, chroma,
@@ -1690,7 +1691,7 @@ double MotionBlockPyramid::GetThSCDScaleFactor(int bitsPerSample) const {
     // Scale to the actual block geometry, chroma contribution, and bit depth.
     const double lumaScale = (double)(nBlkSizeX * nBlkSizeY) / (8.0 * 8.0);
     const double chromaFactor = chroma ? (1.0 + 2.0 / (xRatioUV * yRatioUV)) : 1.0;
-    const double depthScale = ((1 << bitsPerSample) - 1) / 255.0;
+    const double depthScale = ((1 << std::min(16, bitsPerSample)) - 1) / 255.0; // float SAD uses the 16-bit scale
 
     return lumaScale * chromaFactor * depthScale;
 }
@@ -1785,7 +1786,7 @@ std::unique_ptr<BlockMask<PixelType>> MotionBlockPyramid::MakeVectorLengthMask(f
     float halfGamma = fGamma / 2;
     normFactor = normFactor * normFactor;
 
-    int maxVal = (1 << bitsPerSample) - 1;
+    int maxVal = (1 << std::min(16, bitsPerSample)) - 1;
     MaskPitch /= sizeof(PixelType);
 
     for (int by = 0; by < nBlkY; by++) {
@@ -1817,7 +1818,7 @@ std::unique_ptr<BlockMask<PixelType>> MotionBlockPyramid::MakeSADMask(float dSAD
     int time4096X = (256 - time256) * 16 / (nBlkStepX * nPel);
     int time4096Y = (256 - time256) * 16 / (nBlkStepY * nPel);
 
-    int maxVal = (1 << bitsPerSample) - 1;
+    int maxVal = (1 << std::min(16, bitsPerSample)) - 1;
     MaskPitch /= sizeof(PixelType);
 
     for (int by = 0; by < nBlkY; by++) {
@@ -1833,7 +1834,7 @@ std::unique_ptr<BlockMask<PixelType>> MotionBlockPyramid::MakeSADMask(float dSAD
                 byi = by;
             }
             int i1 = bxi + byi * nBlkX;
-            int64_t sad = GetBlock(i1).vector.sad >> (bitsPerSample - 8);
+            int64_t sad = GetBlock(i1).vector.sad >> (std::min(16, bitsPerSample) - 8);
             Mask[bx] = PixelNorm<PixelType>(sad, dSADNormFactor, fGamma, maxVal);
         }
         Mask += MaskPitch;
@@ -1869,7 +1870,7 @@ std::unique_ptr<BlockMask<PixelType>> MotionBlockPyramid::MakeVectorOcclusionMas
     float occnormX = (80.0f  * dMaskNormDivider) / (nBlkStepX * nPel);
     float occnormY = (80.0f * dMaskNormDivider) / (nBlkStepY * nPel);
 
-    int maxVal = force8bitRange ? 255 : ((1 << bitsPerSample) - 1);
+    int maxVal = force8bitRange ? 255 : ((1 << std::min(16, bitsPerSample)) - 1);
     MaskPitch /= sizeof(PixelType);
 
     for (int by = 0; by < nBlkY; by++) {

@@ -228,7 +228,7 @@ static void VS_CC analyseCreate(const VSMap *in, VSMap *out, [[maybe_unused]] vo
         if (d->vi->format.colorFamily == cfGray)
             d->chroma = false;
 
-        int pixelMax = (1 << d->vi->format.bitsPerSample) - 1;
+        int pixelMax = (1 << std::min(16, d->vi->format.bitsPerSample)) - 1; // float SAD uses the 16-bit scale
         d->lsad = (int64_t)((double)d->lsad * pixelMax / 255.0 + 0.5);
         d->badSAD = (int64_t)((double)d->badSAD * pixelMax / 255.0 + 0.5);
         d->nLambda = (int)((double)d->nLambda * pixelMax / 255.0 + 0.5);

@@ -179,7 +179,7 @@ static void VS_CC recalculateCreate(const VSMap *in, VSMap *out, [[maybe_unused]
         if (d->fields && vectors.nPel < 2)
             throw std::runtime_error("fields option requires pel > 1");
 
-        int pixelMax = (1 << d->vi->format.bitsPerSample) - 1;
+        int pixelMax = (1 << std::min(16, d->vi->format.bitsPerSample)) - 1; // float SAD uses the 16-bit scale
         d->thSAD = (int64_t)((double)d->thSAD * pixelMax / 255.0 + 0.5);
         d->nLambda = (int)((double)d->nLambda * pixelMax / 255.0 + 0.5);
 
