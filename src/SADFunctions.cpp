@@ -310,6 +310,20 @@ static const std::unordered_map<uint32_t, SADFunction> sad_functions = {
 };
 
 SADFunction selectSADFunction(unsigned width, unsigned height, unsigned bits) {
+    // 32-bit float pixels: separate dispatch (auto-vec C baseline, overridden by the hand AVX2/AVX-512
+    // kernels). The result is scaled to the 16-bit integer pixel range inside the kernel.
+    if (bits == 32) {
+        SADFunction sad = nullptr;
+        selectSADFunctionFloat(width, height, sad);
+#if defined(MVTOOLS_X86)
+        if (g_cpuinfo & MVU_CPU_AVX2)
+            selectSADFunctionAVX2(width, height, bits, sad);
+        if (g_cpuinfo & MVU_CPU_AVX512_BASE)
+            selectSADFunctionAVX512(width, height, bits, sad);
+#endif
+        return sad;
+    }
+
     SADFunction sad = sad_functions.at(KEY(width, height, bits));
 
 #if defined(MVTOOLS_X86)
@@ -587,6 +601,20 @@ static const std::unordered_map<uint32_t, SADFunction> satd_functions = {
 };
 
 SADFunction selectSATDFunction(unsigned width, unsigned height, unsigned bits) {
+    // 32-bit float pixels: scalar SATD baseline + per-ISA auto-vec overrides (AVX2 all sizes ~1.3-1.4x,
+    // AVX-512 width>=16 up to ~2.6x further). The result is 16-bit-scaled internally.
+    if (bits == 32) {
+        SADFunction satd = nullptr;
+        selectSATDFunctionFloat(width, height, satd);
+#if defined(MVTOOLS_X86)
+        if (g_cpuinfo & MVU_CPU_AVX2)
+            selectSATDFunctionFloatAVX2(width, height, satd);
+        if (g_cpuinfo & MVU_CPU_AVX512_BASE)
+            selectSATDFunctionFloatAVX512(width, height, satd);
+#endif
+        return satd;
+    }
+
     SADFunction satd = satd_functions.at(KEY(width, height, bits));
 
 #if defined(MVTOOLS_X86)

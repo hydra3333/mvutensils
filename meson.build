@@ -48,9 +48,35 @@ if host_machine.cpu_family() == 'x86_64'
         gnu_symbol_visibility: 'hidden',
         include_directories: incdir,
     )
+
+    # Float SATD per-ISA auto-vec overrides: pure-scalar satd_f32_c compiled wider WITH fast-math (so
+    # the reduction reassociates/vectorizes). Separate from the avx2/avx512 libs above, which must stay
+    # non-fast-math (it breaks the hand SAD bitmask abs). ~1.3-1.4x (AVX2) and up to ~3.7x (AVX-512).
+    libs += static_library('floatsad_avx2',
+        files('src/SADFunctions_Float_AVX2.cpp'),
+        cpp_args: ['-march=x86-64-v3', '-ffast-math'],
+        gnu_symbol_visibility: 'hidden',
+        include_directories: incdir,
+    )
+    libs += static_library('floatsad_avx512',
+        files('src/SADFunctions_Float_AVX512.cpp'),
+        cpp_args: ['-march=x86-64-v4', '-mprefer-vector-width=512', '-ffast-math'],
+        gnu_symbol_visibility: 'hidden',
+        include_directories: incdir,
+    )
 elif host_machine.cpu_family() == 'aarch64'
     add_project_arguments('-DMVTOOLS_ARM', language: ['cpp'])
 endif
+
+# Float-pixel SAD baseline: built with -ffast-math (the clang/gcc equivalent of MSVC /fp:fast) so the
+# scalar reduction reassociates and auto-vectorizes. Isolated in its own TU so fast-math touches nothing
+# else. On x86 the AVX2/AVX-512 hand kernels (in the avx2/avx512 libs, NOT fast-math) override it.
+libs += static_library('floatsad',
+    files('src/SADFunctions_Float.cpp'),
+    cpp_args: '-ffast-math',
+    gnu_symbol_visibility: 'hidden',
+    include_directories: incdir,
+)
 
 shared_module('mvutensils',
     files(

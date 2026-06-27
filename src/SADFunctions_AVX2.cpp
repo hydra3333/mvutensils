@@ -3,11 +3,18 @@
 #include <unordered_map>
 
 #include "SADFunctions.h"
+#include "SADFunctions_Float.h"
 #include "Common.h"
 
 #if defined(MVTOOLS_X86)
 
 #include <immintrin.h>
+
+// 32-bit float SAD (hand intrinsics, scaled to the 16-bit pixel range). Width-capped to YMM/XMM here.
+template <unsigned W, unsigned H>
+static unsigned int sad_f32_avx2(const uint8_t *s, intptr_t sp, const uint8_t *r, intptr_t rp) noexcept {
+    return scale_f32_sad(sad_f32_hand_raw<W, H>(s, sp, r, rp));
+}
 
 
 // This version used for width >= 32.
@@ -111,6 +118,8 @@ struct SADWrapperU16_AVX2 {
     { KEY(width, height, 8), SADWrapperU8_AVX2<width, height>::sad_u8_avx2 },
 #define SAD_U16_AVX2(width, height) \
     { KEY(width, height, 16), SADWrapperU16_AVX2<width, height>::sad_u16_avx2 },
+#define SAD_F32_AVX2(width, height) \
+    { KEY(width, height, 32), sad_f32_avx2<width, height> },
 
 static const std::unordered_map<uint32_t, SADFunction> sad_functions = {
     SAD_U8_AVX2(16, 2)
@@ -147,6 +156,12 @@ static const std::unordered_map<uint32_t, SADFunction> sad_functions = {
     SAD_U16_AVX2(128, 32)
     SAD_U16_AVX2(128, 64)
     SAD_U16_AVX2(128, 128)
+    // 32-bit float: width >= 8 only (YMM). W < 8 uses the auto-vec C baseline -- no SSE2 float kernel.
+    SAD_F32_AVX2(8, 1) SAD_F32_AVX2(8, 2) SAD_F32_AVX2(8, 4) SAD_F32_AVX2(8, 8) SAD_F32_AVX2(8, 16)
+    SAD_F32_AVX2(16, 1) SAD_F32_AVX2(16, 2) SAD_F32_AVX2(16, 4) SAD_F32_AVX2(16, 8) SAD_F32_AVX2(16, 16) SAD_F32_AVX2(16, 32)
+    SAD_F32_AVX2(32, 8) SAD_F32_AVX2(32, 16) SAD_F32_AVX2(32, 32) SAD_F32_AVX2(32, 64)
+    SAD_F32_AVX2(64, 16) SAD_F32_AVX2(64, 32) SAD_F32_AVX2(64, 64) SAD_F32_AVX2(64, 128)
+    SAD_F32_AVX2(128, 32) SAD_F32_AVX2(128, 64) SAD_F32_AVX2(128, 128)
 };
 
 void selectSADFunctionAVX2(unsigned width, unsigned height, unsigned bits, SADFunction &sad) {

@@ -3,6 +3,7 @@
 #include <unordered_map>
 
 #include "SADFunctions.h"
+#include "SADFunctions_Float.h"
 #include "Common.h"
 
 #if defined(MVTOOLS_X86)
@@ -136,10 +137,18 @@ static unsigned int satd_u8_avx512(const uint8_t *src, intptr_t sp, const uint8_
     return (unsigned)(sum > 0xFFFFFFFFu ? 0xFFFFFFFFu : sum);
 }
 
+// 32-bit float SAD (hand intrinsics, scaled to 16-bit pixel range). ZMM for W>=16; W<16 falls through
+// to the AVX2 (YMM) override since 512-bit doesn't help there (see bench_degrain/sad_f32_bench.cpp).
+template <unsigned W, unsigned H>
+static unsigned int sad_f32_avx512(const uint8_t *s, intptr_t sp, const uint8_t *r, intptr_t rp) noexcept {
+    return scale_f32_sad(sad_f32_hand_raw<W, H>(s, sp, r, rp));
+}
+
 #define KEY(width, height, bits) (unsigned)(width) << 24 | (height) << 16 | (bits) << 8
 
 #define SAD_U8_AVX512(width, height)  { KEY(width, height, 8), SADWrapperU8_AVX512<width, height>::sad_u8_avx512 },
 #define SAD_U16_AVX512(width, height) { KEY(width, height, 16), SADWrapperU16_AVX512<width, height>::sad_u16_avx512 },
+#define SAD_F32_AVX512(width, height) { KEY(width, height, 32), sad_f32_avx512<width, height> },
 
 static const std::unordered_map<uint32_t, SADFunction> sad_functions = {
     // 8-bit: width >= 64 only
@@ -150,6 +159,11 @@ static const std::unordered_map<uint32_t, SADFunction> sad_functions = {
     SAD_U16_AVX512(32, 8) SAD_U16_AVX512(32, 16) SAD_U16_AVX512(32, 32) SAD_U16_AVX512(32, 64)
     SAD_U16_AVX512(64, 16) SAD_U16_AVX512(64, 32) SAD_U16_AVX512(64, 64) SAD_U16_AVX512(64, 128)
     SAD_U16_AVX512(128, 32) SAD_U16_AVX512(128, 64) SAD_U16_AVX512(128, 128)
+    // 32-bit float: width >= 16 (ZMM); smaller widths use the AVX2 YMM kernel
+    SAD_F32_AVX512(16, 1) SAD_F32_AVX512(16, 2) SAD_F32_AVX512(16, 4) SAD_F32_AVX512(16, 8) SAD_F32_AVX512(16, 16) SAD_F32_AVX512(16, 32)
+    SAD_F32_AVX512(32, 8) SAD_F32_AVX512(32, 16) SAD_F32_AVX512(32, 32) SAD_F32_AVX512(32, 64)
+    SAD_F32_AVX512(64, 16) SAD_F32_AVX512(64, 32) SAD_F32_AVX512(64, 64) SAD_F32_AVX512(64, 128)
+    SAD_F32_AVX512(128, 32) SAD_F32_AVX512(128, 64) SAD_F32_AVX512(128, 128)
 };
 
 #define SATD_U8_AVX512(width, height)  { KEY(width, height, 8), satd_u8_avx512<width, height> },

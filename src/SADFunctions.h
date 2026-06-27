@@ -30,6 +30,12 @@ SADFunction selectSADFunction(unsigned width, unsigned height, unsigned bits);
 
 SADFunction selectSATDFunction(unsigned width, unsigned height, unsigned bits);
 
+// 32-bit float-pixel SAD baseline (auto-vec C, all platforms). bits is implicitly 32.
+void selectSADFunctionFloat(unsigned width, unsigned height, SADFunction &sad);
+
+// 32-bit float-pixel SATD (pure scalar C, all platforms). bits is implicitly 32.
+void selectSATDFunctionFloat(unsigned width, unsigned height, SADFunction &satd);
+
 
 #if defined(MVTOOLS_X86)
 // Higher-ISA selectors overwrite sad/satd only when a kernel exists for the given size.
@@ -37,4 +43,7 @@ void selectSADFunctionAVX2(unsigned width, unsigned height, unsigned bits, SADFu
 void selectSATDFunctionAVX2(unsigned width, unsigned height, unsigned bits, SADFunction &satd);
 void selectSADFunctionAVX512(unsigned width, unsigned height, unsigned bits, SADFunction &sad);
 void selectSATDFunctionAVX512(unsigned width, unsigned height, unsigned bits, SADFunction &satd);
+// Float SATD per-ISA auto-vec overrides (pure scalar C compiled wider; bits implicitly 32).
+void selectSATDFunctionFloatAVX2(unsigned width, unsigned height, SADFunction &satd);
+void selectSATDFunctionFloatAVX512(unsigned width, unsigned height, SADFunction &satd);
 #endif
