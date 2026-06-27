@@ -31,9 +31,11 @@ static MVU_FORCE_INLINE void st_pix(uint8_t *p, __m256i v) {
         __m256i m = _mm256_and_si256(v, _mm256_set1_epi32(0xFF));
         __m128i p16 = _mm_packus_epi32(_mm256_castsi256_si128(m), _mm256_extracti128_si256(m, 1));
         _mm_storel_epi64((__m128i *)p, _mm_packus_epi16(p16, p16)); // low 8 bytes = the 8 pixels
-    } else {
+    } else if constexpr (S == 2) {
         __m256i m = _mm256_and_si256(v, _mm256_set1_epi32(0xFFFF));
         _mm_storeu_si128((__m128i *)p, _mm_packus_epi32(_mm256_castsi256_si128(m), _mm256_extracti128_si256(m, 1)));
+    } else {
+        _mm256_storeu_si256((__m256i *)p, v); // float: the 8 gathered 32-bit lanes ARE the pixels
     }
 }
 
@@ -54,10 +56,10 @@ static MVU_FORCE_INLINE __m256i mc_gather(const PyramidPlane &p, __m256i nX, __m
     const __m256i Y = _mm256_add_epi32(nY, _mm256_set1_epi32(p.nVPaddingPel));
     __m256i idx = _mm256_or_si256(_mm256_and_si256(X, mask), _mm256_sllv_epi32(_mm256_and_si256(Y, mask), _mm256_set1_epi32(log)));
     __m256i off = _mm256_mullo_epi32(_mm256_sub_epi32(idx, _mm256_set1_epi32(mid)), _mm256_set1_epi32((int)p.subPelPlaneOffset));
-    off = _mm256_add_epi32(off, _mm256_slli_epi32(_mm256_srai_epi32(X, log), S == 2 ? 1 : 0));
+    off = _mm256_add_epi32(off, _mm256_slli_epi32(_mm256_srai_epi32(X, log), S == 4 ? 2 : (S == 2 ? 1 : 0)));
     off = _mm256_add_epi32(off, _mm256_mullo_epi32(_mm256_srai_epi32(Y, log), _mm256_set1_epi32((int)p.nPitch)));
     __m256i g = _mm256_i32gather_epi32((const int *)p.pPlane[mid], off, 1);
-    return _mm256_and_si256(g, _mm256_set1_epi32(S == 1 ? 0xFF : 0xFFFF));
+    return _mm256_and_si256(g, _mm256_set1_epi32(S == 1 ? 0xFF : (S == 2 ? 0xFFFF : -1))); // float (S==4): keep all 32 bits
 }
 
 template <int S>
@@ -66,7 +68,7 @@ static void flowinter_impl(uint8_t *MVU_RESTRICT pdst, ptrdiff_t dst_pitch,
         const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
         const uint16_t *MaskB, const uint16_t *MaskF, ptrdiff_t tilePitch,
         int dstX, int dstY, int width, int height, int time256) noexcept {
-    using PT = typename std::conditional<S == 1, uint8_t, uint16_t>::type;
+    using PT = typename std::conditional<S == 1, uint8_t, typename std::conditional<S == 2, uint16_t, float>::type>::type;
     if (width < 8) {
         FlowInter_scalar<PT>(pdst, dst_pitch, prefB, prefF, VXFullB, VXFullF, VYFullB, VYFullF, MaskB, MaskF, tilePitch, dstX, dstY, width, height, time256);
         return;
@@ -119,7 +121,7 @@ static void flowinterextra_impl(uint8_t *MVU_RESTRICT pdst, ptrdiff_t dst_pitch,
         const uint16_t *MaskB, const uint16_t *MaskF, ptrdiff_t tilePitch,
         int dstX, int dstY, int width, int height, int time256,
         const uint16_t *VXFullBB, const uint16_t *VXFullFF, const uint16_t *VYFullBB, const uint16_t *VYFullFF) noexcept {
-    using PT = typename std::conditional<S == 1, uint8_t, uint16_t>::type;
+    using PT = typename std::conditional<S == 1, uint8_t, typename std::conditional<S == 2, uint16_t, float>::type>::type;
     if (width < 8) {
         FlowInterExtra_scalar<PT>(pdst, dst_pitch, prefB, prefF, VXFullB, VXFullF, VYFullB, VYFullF, MaskB, MaskF, tilePitch, dstX, dstY, width, height, time256, VXFullBB, VXFullFF, VYFullBB, VYFullFF);
         return;
@@ -167,7 +169,7 @@ template <int S>
 static void flowfetch_impl(uint8_t *MVU_RESTRICT pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
         const uint16_t *VXFull, const uint16_t *VYFull, ptrdiff_t tilePitch,
         int dstX, int dstY, int width, int height, int time256) noexcept {
-    using PT = typename std::conditional<S == 1, uint8_t, uint16_t>::type;
+    using PT = typename std::conditional<S == 1, uint8_t, typename std::conditional<S == 2, uint16_t, float>::type>::type;
     if (width < 8) {
         FlowFetch_scalar<PT>(pdst, dst_pitch, pref, VXFull, VYFull, tilePitch, dstX, dstY, width, height, time256);
         return;
@@ -227,6 +229,10 @@ void FlowFetch_avx2_u8(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &p
 void FlowFetch_avx2_u16(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
         const uint16_t *VXFull, const uint16_t *VYFull, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept {
     flowfetch_impl<2>(pdst, dst_pitch, pref, VXFull, VYFull, tilePitch, dstX, dstY, width, height, time256);
+}
+void FlowFetch_avx2_f32(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
+        const uint16_t *VXFull, const uint16_t *VYFull, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept {
+    flowfetch_impl<4>(pdst, dst_pitch, pref, VXFull, VYFull, tilePitch, dstX, dstY, width, height, time256);
 }
 
 #endif // MVTOOLS_X86

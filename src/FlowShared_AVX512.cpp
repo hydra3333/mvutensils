@@ -50,8 +50,10 @@ template <int S>
 static MVU_FORCE_INLINE void st_pix(uint8_t *p, __mmask16 k, __m512i v) {
     if constexpr (S == 1)
         _mm512_mask_cvtepi32_storeu_epi8(p, k, v);
-    else
+    else if constexpr (S == 2)
         _mm512_mask_cvtepi32_storeu_epi16(p, k, v);
+    else
+        _mm512_mask_storeu_epi32(p, k, v); // float: gathered 32-bit lanes ARE the pixels, store directly
 }
 
 // (a*b + 256) >> 8 per 32-bit lane, computed through 64-bit products so it is exact even when a*b
@@ -78,10 +80,10 @@ static MVU_FORCE_INLINE __m512i mc_gather(const PyramidPlane &p, __m512i nX, __m
     const __m512i Y = _mm512_add_epi32(nY, _mm512_set1_epi32(p.nVPaddingPel));
     __m512i idx = _mm512_or_epi32(_mm512_and_epi32(X, mask), _mm512_slli_epi32(_mm512_and_epi32(Y, mask), log));
     __m512i off = _mm512_mullo_epi32(_mm512_sub_epi32(idx, _mm512_set1_epi32(mid)), _mm512_set1_epi32((int)p.subPelPlaneOffset));
-    off = _mm512_add_epi32(off, _mm512_slli_epi32(_mm512_srai_epi32(X, log), S == 2 ? 1 : 0));       // (X>>log)*sizeof(PT)
+    off = _mm512_add_epi32(off, _mm512_slli_epi32(_mm512_srai_epi32(X, log), S == 4 ? 2 : (S == 2 ? 1 : 0)));  // (X>>log)*sizeof(PT)
     off = _mm512_add_epi32(off, _mm512_mullo_epi32(_mm512_srai_epi32(Y, log), _mm512_set1_epi32((int)p.nPitch))); // (Y>>log)*nPitch
     __m512i g = _mm512_mask_i32gather_epi32(_mm512_setzero_si512(), k, off, (const void *)p.pPlane[mid], 1);
-    return _mm512_and_si512(g, _mm512_set1_epi32(S == 1 ? 0xFF : 0xFFFF));
+    return _mm512_and_si512(g, _mm512_set1_epi32(S == 1 ? 0xFF : (S == 2 ? 0xFFFF : -1))); // float (S==4): keep all 32 bits
 }
 
 template <int S>
@@ -249,6 +251,10 @@ void FlowFetch_avx512_u8(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane 
 void FlowFetch_avx512_u16(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
         const uint16_t *VXFull, const uint16_t *VYFull, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept {
     flowfetch_impl<2>(pdst, dst_pitch, pref, VXFull, VYFull, tilePitch, dstX, dstY, width, height, time256);
+}
+void FlowFetch_avx512_f32(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
+        const uint16_t *VXFull, const uint16_t *VYFull, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept {
+    flowfetch_impl<4>(pdst, dst_pitch, pref, VXFull, VYFull, tilePitch, dstX, dstY, width, height, time256);
 }
 
 #endif // MVTOOLS_X86

@@ -28,6 +28,8 @@ void FlowFetch_avx512_u8(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane 
     const uint16_t *VXFull, const uint16_t *VYFull, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept;
 void FlowFetch_avx512_u16(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
     const uint16_t *VXFull, const uint16_t *VYFull, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept;
+void FlowFetch_avx512_f32(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
+    const uint16_t *VXFull, const uint16_t *VYFull, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept;
 
 // AVX2 gather kernels (FlowShared_AVX2.cpp): 8 px/iter, same addressing/limits as the AVX-512 ones.
 void FlowInter_avx2_u8(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &prefB, const PyramidPlane &prefF,
@@ -47,6 +49,8 @@ void FlowInterExtra_avx2_u16(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPl
 void FlowFetch_avx2_u8(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
     const uint16_t *VXFull, const uint16_t *VYFull, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept;
 void FlowFetch_avx2_u16(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
+    const uint16_t *VXFull, const uint16_t *VYFull, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept;
+void FlowFetch_avx2_f32(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
     const uint16_t *VXFull, const uint16_t *VYFull, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept;
 
 // Both gather paths (AVX2 vpgatherdd 8-wide, AVX-512 16-wide) compute signed int32 indices relative to
@@ -309,15 +313,19 @@ static MVU_FORCE_INLINE void FlowFetch(
         if (g_cpuinfo & MVU_CPU_AVX512_BASE) {
             if constexpr (sizeof(PixelType) == 1)
                 FlowFetch_avx512_u8(pdst8, dst_pitch, pref, VXFull, VYFull, tilePitch, dstX, dstY, width, height, time256);
-            else
+            else if constexpr (sizeof(PixelType) == 2)
                 FlowFetch_avx512_u16(pdst8, dst_pitch, pref, VXFull, VYFull, tilePitch, dstX, dstY, width, height, time256);
+            else
+                FlowFetch_avx512_f32(pdst8, dst_pitch, pref, VXFull, VYFull, tilePitch, dstX, dstY, width, height, time256);
             return;
         }
         if (g_cpuinfo & MVU_CPU_AVX2) {
             if constexpr (sizeof(PixelType) == 1)
                 FlowFetch_avx2_u8(pdst8, dst_pitch, pref, VXFull, VYFull, tilePitch, dstX, dstY, width, height, time256);
-            else
+            else if constexpr (sizeof(PixelType) == 2)
                 FlowFetch_avx2_u16(pdst8, dst_pitch, pref, VXFull, VYFull, tilePitch, dstX, dstY, width, height, time256);
+            else
+                FlowFetch_avx2_f32(pdst8, dst_pitch, pref, VXFull, VYFull, tilePitch, dstX, dstY, width, height, time256);
             return;
         }
     }

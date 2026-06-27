@@ -241,7 +241,11 @@ static void VS_CC flowCreate(const VSMap *in, VSMap *out, [[maybe_unused]] void 
         {d->vectors, rpStrictSpatial},
     };
 
-    vsapi->createVideoFilter(out, "Flow", d->vi, (d->vi->format.bitsPerSample == 8) ? flowGetFrame<uint8_t> : flowGetFrame<uint16_t>, filterFree<FlowData>, fmParallel, deps, ARRAY_SIZE(deps), d.get(), core);
+    auto getFilterFn = d->vi->format.bytesPerSample == 1 ? flowGetFrame<uint8_t> : flowGetFrame<uint16_t>;
+    if (d->vi->format.bytesPerSample == 4)
+        getFilterFn = flowGetFrame<float>;
+
+    vsapi->createVideoFilter(out, "Flow", d->vi, getFilterFn, filterFree<FlowData>, fmParallel, deps, ARRAY_SIZE(deps), d.get(), core);
     d.release();
 }
 
