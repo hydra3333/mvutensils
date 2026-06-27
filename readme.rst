@@ -33,6 +33,8 @@ Changes
     * The opt argument was dropped from all functions
     
     * More optimized code path, avx2 and avx512 available in most places where it makes sense
+    
+    * Full float support in all filters except Depan*
 
 * Super:
     * Now takes blksize=[h, v], overlap=[h, v] values to properly pad the source frame so the edges also are processed and not generate excessive levels that are unused

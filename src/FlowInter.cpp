@@ -342,7 +342,11 @@ static void VS_CC flowinterCreate(const VSMap *in, VSMap *out, [[maybe_unused]] 
         {d->mvfw, rpGeneral}, 
     };
 
-    vsapi->createVideoFilter(out, "FlowInter", d->vi, (d->vi->format.bitsPerSample == 8) ? flowinterGetFrame<uint8_t> : flowinterGetFrame<uint16_t>, filterFree<FlowInterData>, fmParallel, deps, ARRAY_SIZE(deps), d.get(), core);
+    auto getFilterFn = d->vi->format.bytesPerSample == 1 ? flowinterGetFrame<uint8_t> : flowinterGetFrame<uint16_t>;
+    if (d->vi->format.bytesPerSample == 4)
+        getFilterFn = flowinterGetFrame<float>;
+
+    vsapi->createVideoFilter(out, "FlowInter", d->vi, getFilterFn, filterFree<FlowInterData>, fmParallel, deps, ARRAY_SIZE(deps), d.get(), core);
     d.release();
 }
 

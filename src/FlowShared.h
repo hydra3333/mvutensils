@@ -16,11 +16,18 @@ void FlowInter_avx512_u8(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane 
 void FlowInter_avx512_u16(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &prefB, const PyramidPlane &prefF,
     const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
     const uint16_t *MaskB, const uint16_t *MaskF, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept;
+void FlowInter_avx512_f32(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &prefB, const PyramidPlane &prefF,
+    const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
+    const uint16_t *MaskB, const uint16_t *MaskF, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept;
 void FlowInterExtra_avx512_u8(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &prefB, const PyramidPlane &prefF,
     const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
     const uint16_t *MaskB, const uint16_t *MaskF, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256,
     const uint16_t *VXFullBB, const uint16_t *VXFullFF, const uint16_t *VYFullBB, const uint16_t *VYFullFF) noexcept;
 void FlowInterExtra_avx512_u16(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &prefB, const PyramidPlane &prefF,
+    const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
+    const uint16_t *MaskB, const uint16_t *MaskF, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256,
+    const uint16_t *VXFullBB, const uint16_t *VXFullFF, const uint16_t *VYFullBB, const uint16_t *VYFullFF) noexcept;
+void FlowInterExtra_avx512_f32(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &prefB, const PyramidPlane &prefF,
     const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
     const uint16_t *MaskB, const uint16_t *MaskF, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256,
     const uint16_t *VXFullBB, const uint16_t *VXFullFF, const uint16_t *VYFullBB, const uint16_t *VYFullFF) noexcept;
@@ -38,11 +45,18 @@ void FlowInter_avx2_u8(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &p
 void FlowInter_avx2_u16(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &prefB, const PyramidPlane &prefF,
     const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
     const uint16_t *MaskB, const uint16_t *MaskF, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept;
+void FlowInter_avx2_f32(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &prefB, const PyramidPlane &prefF,
+    const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
+    const uint16_t *MaskB, const uint16_t *MaskF, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept;
 void FlowInterExtra_avx2_u8(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &prefB, const PyramidPlane &prefF,
     const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
     const uint16_t *MaskB, const uint16_t *MaskF, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256,
     const uint16_t *VXFullBB, const uint16_t *VXFullFF, const uint16_t *VYFullBB, const uint16_t *VYFullFF) noexcept;
 void FlowInterExtra_avx2_u16(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &prefB, const PyramidPlane &prefF,
+    const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
+    const uint16_t *MaskB, const uint16_t *MaskF, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256,
+    const uint16_t *VXFullBB, const uint16_t *VXFullFF, const uint16_t *VYFullBB, const uint16_t *VYFullFF) noexcept;
+void FlowInterExtra_avx2_f32(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &prefB, const PyramidPlane &prefF,
     const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
     const uint16_t *MaskB, const uint16_t *MaskF, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256,
     const uint16_t *VXFullBB, const uint16_t *VXFullFF, const uint16_t *VYFullBB, const uint16_t *VYFullFF) noexcept;
@@ -73,9 +87,9 @@ static void Blend(uint8_t *MVU_RESTRICT pdst, const uint8_t *MVU_RESTRICT psrc, 
         const PixelType *pref_ = (const PixelType *)pref;
         PixelType *pdst_ = (PixelType *)pdst;
 
-        for (int w = 0; w < width; w++) {
-            pdst_[w] = (psrc_[w] * (256 - time256) + pref_[w] * time256) >> 8;
-        }
+        for (int w = 0; w < width; w++)
+            pdst_[w] = ShiftDivide<8, 0>(psrc_[w] * (256 - time256) + pref_[w] * time256);
+
         pdst += stride;
         psrc += stride;
         pref += stride;
@@ -95,7 +109,7 @@ struct PlaneGather {
     explicit PlaneGather(const PyramidPlane &p) noexcept
         : base(p.pPlane[0]), spo(p.subPelPlaneOffset), pitch(p.nPitch),
           hpad(p.nHPaddingPel), vpad(p.nVPaddingPel), log(ilog2(p.nPel)), mask(p.nPel - 1) {}
-    MVU_FORCE_INLINE int operator()(int nx, int ny) const noexcept {
+    MVU_FORCE_INLINE PixelType operator()(int nx, int ny) const noexcept {
         int X = nx + hpad, Y = ny + vpad;
         ptrdiff_t off = (ptrdiff_t)((X & mask) | ((Y & mask) << log)) * spo
                       + (ptrdiff_t)(X >> log) * (ptrdiff_t)sizeof(PixelType)
@@ -134,12 +148,20 @@ static void FlowInter_scalar(
             int vxB = ((static_cast<int>(VXFullB[w]) - (1 << 15)) * (256 - time256)) >> 8;
             int vyB = ((static_cast<int>(VYFullB[w]) - (1 << 15)) * (256 - time256)) >> 8;
             // Hoisted branchless loads (see PlaneGather) so this loop auto-vectorizes.
-            int64_t dstF = gF(vxF + xBase, vyF + yBase);
-            int64_t dstB = gB(vxB + xBase, vyB + yBase);
-            int dstF0 = prefF0Ptr[w];
-            int dstB0 = prefB0Ptr[w];
-            pdst[w] = (PixelType)((((dstF * (256 - MaskF[w]) + ((MaskF[w] * (dstB * (256 - MaskB[w]) + MaskB[w] * dstF0) + 256) >> 8) + 256) >> 8) * (256 - time256) +
-                ((dstB * (256 - MaskB[w]) + ((MaskB[w] * (dstF * (256 - MaskF[w]) + MaskF[w] * dstB0) + 256) >> 8) + 256) >> 8) * time256) >> 8) - 1;
+            // Integer path: exact original fixed-point blend ((x+256)>>8 rounding, final -1) via ShiftDivide.
+            // Float path: same structure with /256 and no integer-rounding bias / -1 (ShiftDivide handles both).
+            using Acc = std::conditional_t<std::is_integral_v<PixelType>, int64_t, float>;
+            Acc dstF = gF(vxF + xBase, vyF + yBase);
+            Acc dstB = gB(vxB + xBase, vyB + yBase);
+            Acc dstF0 = prefF0Ptr[w];
+            Acc dstB0 = prefB0Ptr[w];
+            Acc occF = ShiftDivide<8, 256>(dstF * (256 - MaskF[w]) + ShiftDivide<8, 256>(MaskF[w] * (dstB * (256 - MaskB[w]) + MaskB[w] * dstF0)));
+            Acc occB = ShiftDivide<8, 256>(dstB * (256 - MaskB[w]) + ShiftDivide<8, 256>(MaskB[w] * (dstF * (256 - MaskF[w]) + MaskF[w] * dstB0)));
+            Acc blended = ShiftDivide<8, 0>(occF * (256 - time256) + occB * time256);
+            if constexpr (std::is_integral_v<PixelType>)
+                pdst[w] = (PixelType)(blended - 1);
+            else
+                pdst[w] = (PixelType)blended;
         }
 
         pdst += dst_pitch;
@@ -186,20 +208,26 @@ static void FlowInterExtra_scalar(
             int vxBB = ((static_cast<int>(VXFullBB[w]) - (1 << 15)) * (256 - time256)) >> 8;
             int vyBB = ((static_cast<int>(VYFullBB[w]) - (1 << 15)) * (256 - time256)) >> 8;
             // Hoisted branchless loads (see PlaneGather) so this loop auto-vectorizes.
-            int dstF = gF(vxF + xBase, vyF + yBase);
-            int dstFF = gF(vxFF + xBase, vyFF + yBase);
-            int dstB = gB(vxB + xBase, vyB + yBase);
-            int dstBB = gB(vxBB + xBase, vyBB + yBase);
+            using Acc = std::conditional_t<std::is_integral_v<PixelType>, int, float>;
+            Acc dstF = gF(vxF + xBase, vyF + yBase);
+            Acc dstFF = gF(vxFF + xBase, vyFF + yBase);
+            Acc dstB = gB(vxB + xBase, vyB + yBase);
+            Acc dstBB = gB(vxBB + xBase, vyBB + yBase);
 
             /* use median, firsly get min max of compensations */
-            int minfb = std::min(dstB, dstF);
-            int maxfb = std::max(dstB, dstF);
+            Acc minfb = std::min(dstB, dstF);
+            Acc maxfb = std::max(dstB, dstF);
 
-            int medianBB = std::max(minfb, std::min(dstBB, maxfb));
-            int medianFF = std::max(minfb, std::min(dstFF, maxfb));
+            Acc medianBB = std::max(minfb, std::min(dstBB, maxfb));
+            Acc medianFF = std::max(minfb, std::min(dstFF, maxfb));
 
-            pdst[w] = ((((medianBB * MaskF[w] + dstF * (256 - MaskF[w]) + 256) >> 8) * (256 - time256) +
-                ((medianFF * MaskB[w] + dstB * (256 - MaskB[w]) + 256) >> 8) * time256) >> 8) - 1;
+            // Integer path matches the original exactly (ShiftDivide<8,256> == (x+256)>>8, then -1); float uses /256.
+            Acc blended = ShiftDivide<8, 0>(ShiftDivide<8, 256>(medianBB * MaskF[w] + dstF * (256 - MaskF[w])) * (256 - time256) +
+                ShiftDivide<8, 256>(medianFF * MaskB[w] + dstB * (256 - MaskB[w])) * time256);
+            if constexpr (std::is_integral_v<PixelType>)
+                pdst[w] = (PixelType)(blended - 1);
+            else
+                pdst[w] = (PixelType)blended;
         }
         pdst += dst_pitch;
         VXFullB += tilePitch;
@@ -256,15 +284,19 @@ static MVU_FORCE_INLINE void FlowInter(
         if (g_cpuinfo & MVU_CPU_AVX512_BASE) {
             if constexpr (sizeof(PixelType) == 1)
                 FlowInter_avx512_u8(pdst8, dst_pitch, prefB, prefF, VXFullB, VXFullF, VYFullB, VYFullF, MaskB, MaskF, tilePitch, dstX, dstY, width, height, time256);
-            else
+            else if constexpr (sizeof(PixelType) == 2)
                 FlowInter_avx512_u16(pdst8, dst_pitch, prefB, prefF, VXFullB, VXFullF, VYFullB, VYFullF, MaskB, MaskF, tilePitch, dstX, dstY, width, height, time256);
+            else
+                FlowInter_avx512_f32(pdst8, dst_pitch, prefB, prefF, VXFullB, VXFullF, VYFullB, VYFullF, MaskB, MaskF, tilePitch, dstX, dstY, width, height, time256);
             return;
         }
         if (g_cpuinfo & MVU_CPU_AVX2) {
             if constexpr (sizeof(PixelType) == 1)
                 FlowInter_avx2_u8(pdst8, dst_pitch, prefB, prefF, VXFullB, VXFullF, VYFullB, VYFullF, MaskB, MaskF, tilePitch, dstX, dstY, width, height, time256);
-            else
+            else if constexpr (sizeof(PixelType) == 2)
                 FlowInter_avx2_u16(pdst8, dst_pitch, prefB, prefF, VXFullB, VXFullF, VYFullB, VYFullF, MaskB, MaskF, tilePitch, dstX, dstY, width, height, time256);
+            else
+                FlowInter_avx2_f32(pdst8, dst_pitch, prefB, prefF, VXFullB, VXFullF, VYFullB, VYFullF, MaskB, MaskF, tilePitch, dstX, dstY, width, height, time256);
             return;
         }
     }
@@ -287,15 +319,19 @@ static MVU_FORCE_INLINE void FlowInterExtra(
         if (g_cpuinfo & MVU_CPU_AVX512_BASE) {
             if constexpr (sizeof(PixelType) == 1)
                 FlowInterExtra_avx512_u8(pdst8, dst_pitch, prefB, prefF, VXFullB, VXFullF, VYFullB, VYFullF, MaskB, MaskF, tilePitch, dstX, dstY, width, height, time256, VXFullBB, VXFullFF, VYFullBB, VYFullFF);
-            else
+            else if constexpr (sizeof(PixelType) == 2)
                 FlowInterExtra_avx512_u16(pdst8, dst_pitch, prefB, prefF, VXFullB, VXFullF, VYFullB, VYFullF, MaskB, MaskF, tilePitch, dstX, dstY, width, height, time256, VXFullBB, VXFullFF, VYFullBB, VYFullFF);
+            else
+                FlowInterExtra_avx512_f32(pdst8, dst_pitch, prefB, prefF, VXFullB, VXFullF, VYFullB, VYFullF, MaskB, MaskF, tilePitch, dstX, dstY, width, height, time256, VXFullBB, VXFullFF, VYFullBB, VYFullFF);
             return;
         }
         if (g_cpuinfo & MVU_CPU_AVX2) {
             if constexpr (sizeof(PixelType) == 1)
                 FlowInterExtra_avx2_u8(pdst8, dst_pitch, prefB, prefF, VXFullB, VXFullF, VYFullB, VYFullF, MaskB, MaskF, tilePitch, dstX, dstY, width, height, time256, VXFullBB, VXFullFF, VYFullBB, VYFullFF);
-            else
+            else if constexpr (sizeof(PixelType) == 2)
                 FlowInterExtra_avx2_u16(pdst8, dst_pitch, prefB, prefF, VXFullB, VXFullF, VYFullB, VYFullF, MaskB, MaskF, tilePitch, dstX, dstY, width, height, time256, VXFullBB, VXFullFF, VYFullBB, VYFullFF);
+            else
+                FlowInterExtra_avx2_f32(pdst8, dst_pitch, prefB, prefF, VXFullB, VXFullF, VYFullB, VYFullF, MaskB, MaskF, tilePitch, dstX, dstY, width, height, time256, VXFullBB, VXFullFF, VYFullBB, VYFullFF);
             return;
         }
     }

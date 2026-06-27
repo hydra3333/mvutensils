@@ -243,6 +243,21 @@ void FlowInterExtra_avx512_u16(uint8_t *pdst, ptrdiff_t dst_pitch, const Pyramid
         const uint16_t *VXFullBB, const uint16_t *VXFullFF, const uint16_t *VYFullBB, const uint16_t *VYFullFF) noexcept {
     flowinterextra_impl<2>(pdst, dst_pitch, prefB, prefF, VXFullB, VXFullF, VYFullB, VYFullF, MaskB, MaskF, tilePitch, dstX, dstY, width, height, time256, VXFullBB, VXFullFF, VYFullBB, VYFullFF);
 }
+void FlowInter_avx512_f32(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &prefB, const PyramidPlane &prefF,
+        const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
+        const uint16_t *MaskB, const uint16_t *MaskF, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept {
+    // Hand gather-blend intrinsics (vpgatherdd or vgatherqps, ±FMA) all measured SLOWER than the compiler's
+    // own auto-vectorization of the scalar at this ISA -- the win is its cross-iteration scheduling, not the
+    // instruction selection. So the AVX-512 "intrinsic" IS the auto-vectorized scalar, instantiated in this
+    // /arch:AVX512 TU. (AVX2 keeps its hand intrinsic, which DOES beat auto-vec scalar@avx2 -- see bench.)
+    FlowInter_scalar<float>(pdst, dst_pitch, prefB, prefF, VXFullB, VXFullF, VYFullB, VYFullF, MaskB, MaskF, tilePitch, dstX, dstY, width, height, time256);
+}
+void FlowInterExtra_avx512_f32(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &prefB, const PyramidPlane &prefF,
+        const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
+        const uint16_t *MaskB, const uint16_t *MaskF, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256,
+        const uint16_t *VXFullBB, const uint16_t *VXFullFF, const uint16_t *VYFullBB, const uint16_t *VYFullFF) noexcept {
+    FlowInterExtra_scalar<float>(pdst, dst_pitch, prefB, prefF, VXFullB, VXFullF, VYFullB, VYFullF, MaskB, MaskF, tilePitch, dstX, dstY, width, height, time256, VXFullBB, VXFullFF, VYFullBB, VYFullFF);
+}
 
 void FlowFetch_avx512_u8(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
         const uint16_t *VXFull, const uint16_t *VYFull, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept {

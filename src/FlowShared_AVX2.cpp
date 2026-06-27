@@ -164,6 +164,104 @@ static void flowinterextra_impl(uint8_t *MVU_RESTRICT pdst, ptrdiff_t dst_pitch,
     }
 }
 
+// ---- 32-bit float blends. Gather addressing identical to the integer kernels (mc_gather<4> lane = float
+// bits); the occlusion blend is float, mirroring FlowInter_scalar<float> (every ">>8 (+256)" / ">>8" becomes
+// "* (1/256)", and the integer-rounding final "- 1" drops). 8 px/iter, overlapping last group like the int path. ----
+static void flowinter_f32_impl(uint8_t *MVU_RESTRICT pdst, ptrdiff_t dst_pitch,
+        const PyramidPlane &prefB, const PyramidPlane &prefF,
+        const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
+        const uint16_t *MaskB, const uint16_t *MaskF, ptrdiff_t tilePitch,
+        int dstX, int dstY, int width, int height, int time256) noexcept {
+    if (width < 8) {
+        FlowInter_scalar<float>(pdst, dst_pitch, prefB, prefF, VXFullB, VXFullF, VYFullB, VYFullF, MaskB, MaskF, tilePitch, dstX, dstY, width, height, time256);
+        return;
+    }
+    const ptrdiff_t tp = tilePitch / (ptrdiff_t)sizeof(uint16_t);
+    const int nPelLog = ilog2(prefB.nPel);
+    const int it = 256 - time256;
+    const __m256i lanes = _mm256_setr_epi32(0, 1, 2, 3, 4, 5, 6, 7);
+    const __m256i v32768 = _mm256_set1_epi32(32768);
+    const __m256 v256f = _mm256_set1_ps(256.0f), inv256 = _mm256_set1_ps(1.0f / 256.0f);
+    const __m256 vtimef = _mm256_set1_ps((float)time256), vitf = _mm256_set1_ps((float)it);
+    auto motion = [&](const uint16_t *VX, int scale) {
+        return _mm256_srai_epi32(_mm256_mullo_epi32(_mm256_sub_epi32(ld_u16(VX), v32768), _mm256_set1_epi32(scale)), 8);
+    };
+
+    for (int h = 0; h < height; h++) {
+        const int yBase = (h + dstY) << nPelLog;
+        const __m256i vyBase = _mm256_set1_epi32(yBase);
+        const float *F0 = reinterpret_cast<const float *>(prefF.GetPointer<float>(dstX << nPelLog, yBase));
+        const float *B0 = reinterpret_cast<const float *>(prefB.GetPointer<float>(dstX << nPelLog, yBase));
+        auto do8 = [&](int w) {
+            const __m256i xBase = _mm256_slli_epi32(_mm256_add_epi32(lanes, _mm256_set1_epi32(w + dstX)), nPelLog);
+            __m256 F = _mm256_castsi256_ps(mc_gather<4>(prefF, _mm256_add_epi32(motion(VXFullF + w, time256), xBase), _mm256_add_epi32(motion(VYFullF + w, time256), vyBase)));
+            __m256 B = _mm256_castsi256_ps(mc_gather<4>(prefB, _mm256_add_epi32(motion(VXFullB + w, it), xBase), _mm256_add_epi32(motion(VYFullB + w, it), vyBase)));
+            __m256 F0v = _mm256_loadu_ps(F0 + w), B0v = _mm256_loadu_ps(B0 + w);
+            __m256 mF = _mm256_cvtepi32_ps(ld_u16(MaskF + w)), mB = _mm256_cvtepi32_ps(ld_u16(MaskB + w));
+            __m256 FmF = _mm256_mul_ps(F, _mm256_sub_ps(v256f, mF)), BmB = _mm256_mul_ps(B, _mm256_sub_ps(v256f, mB));
+            __m256 pA = _mm256_mul_ps(_mm256_mul_ps(mF, _mm256_fmadd_ps(mB, F0v, BmB)), inv256);
+            __m256 pB = _mm256_mul_ps(_mm256_mul_ps(mB, _mm256_fmadd_ps(mF, B0v, FmF)), inv256);
+            __m256 term1 = _mm256_mul_ps(_mm256_add_ps(FmF, pA), inv256);
+            __m256 term2 = _mm256_mul_ps(_mm256_add_ps(BmB, pB), inv256);
+            __m256 out = _mm256_mul_ps(_mm256_fmadd_ps(term1, vitf, _mm256_mul_ps(term2, vtimef)), inv256);
+            _mm256_storeu_ps((float *)(pdst + (size_t)w * 4), out);
+        };
+        int w = 0;
+        for (; w + 8 <= width; w += 8) do8(w);
+        if (w < width) do8(width - 8); // overlapping last group (idempotent)
+        pdst += dst_pitch;
+        VXFullB += tp; VYFullB += tp; VXFullF += tp; VYFullF += tp; MaskB += tp; MaskF += tp;
+    }
+}
+
+static void flowinterextra_f32_impl(uint8_t *MVU_RESTRICT pdst, ptrdiff_t dst_pitch,
+        const PyramidPlane &prefB, const PyramidPlane &prefF,
+        const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
+        const uint16_t *MaskB, const uint16_t *MaskF, ptrdiff_t tilePitch,
+        int dstX, int dstY, int width, int height, int time256,
+        const uint16_t *VXFullBB, const uint16_t *VXFullFF, const uint16_t *VYFullBB, const uint16_t *VYFullFF) noexcept {
+    if (width < 8) {
+        FlowInterExtra_scalar<float>(pdst, dst_pitch, prefB, prefF, VXFullB, VXFullF, VYFullB, VYFullF, MaskB, MaskF, tilePitch, dstX, dstY, width, height, time256, VXFullBB, VXFullFF, VYFullBB, VYFullFF);
+        return;
+    }
+    const ptrdiff_t tp = tilePitch / (ptrdiff_t)sizeof(int16_t);
+    const int nPelLog = ilog2(prefB.nPel);
+    const int it = 256 - time256;
+    const __m256i lanes = _mm256_setr_epi32(0, 1, 2, 3, 4, 5, 6, 7);
+    const __m256i v32768 = _mm256_set1_epi32(32768);
+    const __m256 v256f = _mm256_set1_ps(256.0f), inv256 = _mm256_set1_ps(1.0f / 256.0f);
+    const __m256 vtimef = _mm256_set1_ps((float)time256), vitf = _mm256_set1_ps((float)it);
+    auto motion = [&](const uint16_t *VX, int scale) {
+        return _mm256_srai_epi32(_mm256_mullo_epi32(_mm256_sub_epi32(ld_u16(VX), v32768), _mm256_set1_epi32(scale)), 8);
+    };
+
+    for (int h = 0; h < height; h++) {
+        const int yBase = (h + dstY) << nPelLog;
+        const __m256i vyBase = _mm256_set1_epi32(yBase);
+        auto do8 = [&](int w) {
+            const __m256i xBase = _mm256_slli_epi32(_mm256_add_epi32(lanes, _mm256_set1_epi32(w + dstX)), nPelLog);
+            __m256 F  = _mm256_castsi256_ps(mc_gather<4>(prefF, _mm256_add_epi32(motion(VXFullF + w, time256), xBase),  _mm256_add_epi32(motion(VYFullF + w, time256), vyBase)));
+            __m256 FF = _mm256_castsi256_ps(mc_gather<4>(prefF, _mm256_add_epi32(motion(VXFullFF + w, time256), xBase), _mm256_add_epi32(motion(VYFullFF + w, time256), vyBase)));
+            __m256 B  = _mm256_castsi256_ps(mc_gather<4>(prefB, _mm256_add_epi32(motion(VXFullB + w, it), xBase),  _mm256_add_epi32(motion(VYFullB + w, it), vyBase)));
+            __m256 BB = _mm256_castsi256_ps(mc_gather<4>(prefB, _mm256_add_epi32(motion(VXFullBB + w, it), xBase), _mm256_add_epi32(motion(VYFullBB + w, it), vyBase)));
+            __m256 minfb = _mm256_min_ps(B, F), maxfb = _mm256_max_ps(B, F);
+            __m256 medianBB = _mm256_max_ps(minfb, _mm256_min_ps(BB, maxfb));
+            __m256 medianFF = _mm256_max_ps(minfb, _mm256_min_ps(FF, maxfb));
+            __m256 mF = _mm256_cvtepi32_ps(ld_u16(MaskF + w)), mB = _mm256_cvtepi32_ps(ld_u16(MaskB + w));
+            __m256 t1 = _mm256_mul_ps(_mm256_fmadd_ps(medianBB, mF, _mm256_mul_ps(F, _mm256_sub_ps(v256f, mF))), inv256);
+            __m256 t2 = _mm256_mul_ps(_mm256_fmadd_ps(medianFF, mB, _mm256_mul_ps(B, _mm256_sub_ps(v256f, mB))), inv256);
+            __m256 out = _mm256_mul_ps(_mm256_fmadd_ps(t1, vitf, _mm256_mul_ps(t2, vtimef)), inv256);
+            _mm256_storeu_ps((float *)(pdst + (size_t)w * 4), out);
+        };
+        int w = 0;
+        for (; w + 8 <= width; w += 8) do8(w);
+        if (w < width) do8(width - 8);
+        pdst += dst_pitch;
+        VXFullB += tp; VYFullB += tp; VXFullF += tp; VYFullF += tp; MaskB += tp; MaskF += tp;
+        VXFullBB += tp; VYFullBB += tp; VXFullFF += tp; VYFullFF += tp;
+    }
+}
+
 // flowFetch: motion-compensated copy -- one gather + store per pixel, no blend (motion rounds +128).
 template <int S>
 static void flowfetch_impl(uint8_t *MVU_RESTRICT pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
@@ -220,6 +318,17 @@ void FlowInterExtra_avx2_u16(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPl
         const uint16_t *MaskB, const uint16_t *MaskF, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256,
         const uint16_t *VXFullBB, const uint16_t *VXFullFF, const uint16_t *VYFullBB, const uint16_t *VYFullFF) noexcept {
     flowinterextra_impl<2>(pdst, dst_pitch, prefB, prefF, VXFullB, VXFullF, VYFullB, VYFullF, MaskB, MaskF, tilePitch, dstX, dstY, width, height, time256, VXFullBB, VXFullFF, VYFullBB, VYFullFF);
+}
+void FlowInter_avx2_f32(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &prefB, const PyramidPlane &prefF,
+        const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
+        const uint16_t *MaskB, const uint16_t *MaskF, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept {
+    flowinter_f32_impl(pdst, dst_pitch, prefB, prefF, VXFullB, VXFullF, VYFullB, VYFullF, MaskB, MaskF, tilePitch, dstX, dstY, width, height, time256);
+}
+void FlowInterExtra_avx2_f32(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &prefB, const PyramidPlane &prefF,
+        const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
+        const uint16_t *MaskB, const uint16_t *MaskF, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256,
+        const uint16_t *VXFullBB, const uint16_t *VXFullFF, const uint16_t *VYFullBB, const uint16_t *VYFullFF) noexcept {
+    flowinterextra_f32_impl(pdst, dst_pitch, prefB, prefF, VXFullB, VXFullF, VYFullB, VYFullF, MaskB, MaskF, tilePitch, dstX, dstY, width, height, time256, VXFullBB, VXFullFF, VYFullBB, VYFullFF);
 }
 
 void FlowFetch_avx2_u8(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
