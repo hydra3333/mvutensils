@@ -148,8 +148,8 @@ static void RB2F_C(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RESTRICT pSrc
 
     for (int y = 0; y < nHeight; y++) {
         for (int x = 0; x < nWidth; x++)
-            pDst[x] = (pSrc[x * 2] + pSrc[x * 2 + 1]
-                + pSrc[x * 2 + nSrcPitch + 1] + pSrc[x * 2 + nSrcPitch] + 2) / 4;
+            pDst[x] = ShiftDivide<2, 2>(pSrc[x * 2] + pSrc[x * 2 + 1]
+                + pSrc[x * 2 + nSrcPitch + 1] + pSrc[x * 2 + nSrcPitch]);
 
         pDst += nDstPitch;
         pSrc += nSrcPitch * 2;
@@ -179,22 +179,22 @@ static void RB2BilinearFiltered(uint8_t *pDst, const uint8_t * MVU_RESTRICT pSrc
         if (y == 0 || y == nHeight - 1) {
             // Edge rows: simple average of the two source rows
             for (int x = 0; x < srcWidth2; x++)
-                tmp[x] = (row[x] + row[x + nSrcPitch] + 1) / 2;
+                tmp[x] = ShiftDivide<1, 1>(row[x] + row[x + nSrcPitch]);
         } else {
             // Middle rows: 4-tap filter (1/8, 3/8, 3/8, 1/8) across rows 2y-1..2y+2
             for (int x = 0; x < srcWidth2; x++)
-                tmp[x] = (row[x - nSrcPitch] + (row[x] + row[x + nSrcPitch]) * 3 + row[x + nSrcPitch * 2] + 4) / 8;
+                tmp[x] = ShiftDivide<3, 4>(row[x - nSrcPitch] + (row[x] + row[x + nSrcPitch]) * 3 + row[x + nSrcPitch * 2]);
         }
 
         // Horizontal filter: reduce tmp from srcWidth2 to nWidth, write to dst row y
         PixelType *dstRow = dst + y * nDstPitch;
 
-        dstRow[0] = (tmp[0] + tmp[1] + 1) / 2;
+        dstRow[0] = ShiftDivide<1, 1>(tmp[0] + tmp[1]);
 
         for (int x = 1; x < nWidth - 1; x++)
-            dstRow[x] = (tmp[x * 2 - 1] + (tmp[x * 2] + tmp[x * 2 + 1]) * 3 + tmp[x * 2 + 2] + 4) / 8;
+            dstRow[x] = ShiftDivide<3, 4>(tmp[x * 2 - 1] + (tmp[x * 2] + tmp[x * 2 + 1]) * 3 + tmp[x * 2 + 2]);
 
-        dstRow[nWidth - 1] = (tmp[(nWidth - 1) * 2] + tmp[(nWidth - 1) * 2 + 1] + 1) / 2;
+        dstRow[nWidth - 1] = ShiftDivide<1, 1>(tmp[(nWidth - 1) * 2] + tmp[(nWidth - 1) * 2 + 1]);
     }
 }
 
@@ -212,6 +212,8 @@ static void RB2Cubic(uint8_t *pDst, const uint8_t *pSrc, ptrdiff_t nDstPitch,
     nDstPitch /= sizeof(PixelType);
     nSrcPitch /= sizeof(PixelType);
 
+    typedef typename std::conditional_t<std::is_integral_v<PixelType>, int, float> TempStorage;
+
     const int srcWidth2 = nWidth * 2;
 
     for (int y = 0; y < nHeight; y++) {
@@ -221,44 +223,44 @@ static void RB2Cubic(uint8_t *pDst, const uint8_t *pSrc, ptrdiff_t nDstPitch,
         if (y == 0 || y == nHeight - 1) {
             // Edge rows: simple average of the two source rows
             for (int x = 0; x < srcWidth2; x++)
-                tmp[x] = (row[x] + row[x + nSrcPitch] + 1) / 2;
+                tmp[x] = ShiftDivide<1, 1>(row[x] + row[x + nSrcPitch]);
         } else {
             // Middle rows: 6-tap filter (1/32, 5/32, 10/32, 10/32, 5/32, 1/32) across rows 2y-2..2y+3
             for (int x = 0; x < srcWidth2; x++) {
-                int m0 = row[x - nSrcPitch * 2];
-                int m1 = row[x - nSrcPitch];
-                int m2 = row[x];
-                int m3 = row[x + nSrcPitch];
-                int m4 = row[x + nSrcPitch * 2];
-                int m5 = row[x + nSrcPitch * 3];
+                TempStorage m0 = row[x - nSrcPitch * 2];
+                TempStorage m1 = row[x - nSrcPitch];
+                TempStorage m2 = row[x];
+                TempStorage m3 = row[x + nSrcPitch];
+                TempStorage m4 = row[x + nSrcPitch * 2];
+                TempStorage m5 = row[x + nSrcPitch * 3];
 
                 m2 = (m2 + m3) * 10;
                 m1 = (m1 + m4) * 5;
-                m0 += m5 + m2 + m1 + 16;
-                tmp[x] = m0 >> 5;
+                m0 += m5 + m2 + m1;
+                tmp[x] = ShiftDivide<5, 16>(m0);
             }
         }
 
         // Horizontal filter: reduce tmp from srcWidth2 to nWidth, write to dst row y
         PixelType *dstRow = dst + y * nDstPitch;
 
-        dstRow[0] = (tmp[0] + tmp[1] + 1) / 2;
+        dstRow[0] = AveragePixels(tmp[0], tmp[1]);
 
         for (int x = 1; x < nWidth - 1; x++) {
-            int m0 = tmp[x * 2 - 2];
-            int m1 = tmp[x * 2 - 1];
-            int m2 = tmp[x * 2];
-            int m3 = tmp[x * 2 + 1];
-            int m4 = tmp[x * 2 + 2];
-            int m5 = tmp[x * 2 + 3];
+            TempStorage m0 = tmp[x * 2 - 2];
+            TempStorage m1 = tmp[x * 2 - 1];
+            TempStorage m2 = tmp[x * 2];
+            TempStorage m3 = tmp[x * 2 + 1];
+            TempStorage m4 = tmp[x * 2 + 2];
+            TempStorage m5 = tmp[x * 2 + 3];
 
             m2 = (m2 + m3) * 10;
             m1 = (m1 + m4) * 5;
-            m0 += m5 + m2 + m1 + 16;
-            dstRow[x] = m0 >> 5;
+            m0 += m5 + m2 + m1;
+            dstRow[x] = ShiftDivide<5, 16>(m0);
         }
 
-        dstRow[nWidth - 1] = (tmp[(nWidth - 1) * 2] + tmp[(nWidth - 1) * 2 + 1] + 1) / 2;
+        dstRow[nWidth - 1] = AveragePixels(tmp[(nWidth - 1) * 2], tmp[(nWidth - 1) * 2 + 1]);
     }
 }
 
@@ -312,7 +314,7 @@ static void VerticalBilinear(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RES
 
     for (int j = 0; j < nHeight - 1; j++) {
         for (int i = 0; i < nWidth; i++)
-            pDst[i] = (pSrc[i] + pSrc[i + nPitch] + 1) >> 1;
+            pDst[i] = AveragePixels(pSrc[i], pSrc[i + nPitch]);
         pDst += nPitch;
         pSrc += nPitch;
     }
@@ -332,7 +334,7 @@ static void HorizontalBilinear(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_R
 
     for (int j = 0; j < nHeight; j++) {
         for (int i = 0; i < nWidth - 1; i++)
-            pDst[i] = (pSrc[i] + pSrc[i + 1] + 1) >> 1;
+            pDst[i] = AveragePixels(pSrc[i], pSrc[i + 1]);
 
         pDst[nWidth - 1] = pSrc[nWidth - 1];
         pDst += nPitch;
@@ -351,14 +353,14 @@ static void DiagonalBilinear(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RES
 
     for (int j = 0; j < nHeight - 1; j++) {
         for (int i = 0; i < nWidth - 1; i++)
-            pDst[i] = (pSrc[i] + pSrc[i + 1] + pSrc[i + nPitch] + pSrc[i + nPitch + 1] + 2) >> 2;
+            pDst[i] = AveragePixels(pSrc[i], pSrc[i + 1], pSrc[i + nPitch], pSrc[i + nPitch + 1]);
 
-        pDst[nWidth - 1] = (pSrc[nWidth - 1] + pSrc[nWidth + nPitch - 1] + 1) >> 1;
+        pDst[nWidth - 1] = AveragePixels(pSrc[nWidth - 1], pSrc[nWidth + nPitch - 1]);
         pDst += nPitch;
         pSrc += nPitch;
     }
     for (int i = 0; i < nWidth - 1; i++)
-        pDst[i] = (pSrc[i] + pSrc[i + 1] + 1) >> 1;
+        pDst[i] = AveragePixels(pSrc[i], pSrc[i + 1]);
     pDst[nWidth - 1] = pSrc[nWidth - 1];
 }
 
@@ -372,39 +374,41 @@ static void VerticalWiener(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RESTR
 
     nPitch /= sizeof(PixelType);
 
-    int pixelMax = (1 << bitsPerSample) - 1;
+    typedef typename std::conditional_t<std::is_integral_v<PixelType>, int, float> TempStorage;
+
+    int pixelMax = PixelMaxValue<PixelType>(bitsPerSample);
 
     for (int j = 0; j < 2; j++) {
         for (int i = 0; i < nWidth; i++)
-            pDst[i] = (pSrc[i] + pSrc[i + nPitch] + 1) >> 1;
+            pDst[i] = AveragePixels(pSrc[i], pSrc[i + nPitch]);
         pDst += nPitch;
         pSrc += nPitch;
     }
     for (int j = 2; j < nHeight - 4; j++) {
         for (int i = 0; i < nWidth; i++) {
-            int m0 = pSrc[i - nPitch * 2];
-            int m1 = pSrc[i - nPitch];
-            int m2 = pSrc[i];
-            int m3 = pSrc[i + nPitch];
-            int m4 = pSrc[i + nPitch * 2];
-            int m5 = pSrc[i + nPitch * 3];
+            TempStorage m0 = pSrc[i - nPitch * 2];
+            TempStorage m1 = pSrc[i - nPitch];
+            TempStorage m2 = pSrc[i];
+            TempStorage m3 = pSrc[i + nPitch];
+            TempStorage m4 = pSrc[i + nPitch * 2];
+            TempStorage m5 = pSrc[i + nPitch * 3];
 
             m2 = (m2 + m3) * 4;
 
             m2 -= m1 + m4;
             m2 *= 5;
 
-            m0 += m5 + m2 + 16;
-            m0 >>= 5;
+            m0 += m5 + m2;
+            m0 = ShiftDivide<5, 16>(m0);
 
-            pDst[i] = std::max(0, std::min(m0, pixelMax));
+            pDst[i] = ClampIntToRange(m0, pixelMax);
         }
         pDst += nPitch;
         pSrc += nPitch;
     }
     for (intptr_t j = nHeight - 4; j < nHeight - 1; j++) {
         for (intptr_t i = 0; i < nWidth; i++) {
-            pDst[i] = (pSrc[i] + pSrc[i + nPitch] + 1) >> 1;
+            pDst[i] = AveragePixels(pSrc[i], pSrc[i + nPitch]);
         }
 
         pDst += nPitch;
@@ -424,33 +428,35 @@ static void HorizontalWiener(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RES
 
     nPitch /= sizeof(PixelType);
 
-    int pixelMax = (1 << bitsPerSample) - 1;
+    typedef typename std::conditional_t<std::is_integral_v<PixelType>, int, float> TempStorage;
+
+    int pixelMax = PixelMaxValue<PixelType>(bitsPerSample);
 
     for (int j = 0; j < nHeight; j++) {
-        pDst[0] = (pSrc[0] + pSrc[1] + 1) >> 1;
-        pDst[1] = (pSrc[1] + pSrc[2] + 1) >> 1;
+        pDst[0] = AveragePixels(pSrc[0], pSrc[1]);
+        pDst[1] = AveragePixels(pSrc[1], pSrc[2]);
 
         for (int i = 2; i < nWidth - 4; i++) {
-            int m0 = pSrc[i - 2];
-            int m1 = pSrc[i - 1];
-            int m2 = pSrc[i];
-            int m3 = pSrc[i + 1];
-            int m4 = pSrc[i + 2];
-            int m5 = pSrc[i + 3];
+            TempStorage m0 = pSrc[i - 2];
+            TempStorage m1 = pSrc[i - 1];
+            TempStorage m2 = pSrc[i];
+            TempStorage m3 = pSrc[i + 1];
+            TempStorage m4 = pSrc[i + 2];
+            TempStorage m5 = pSrc[i + 3];
 
             m2 = (m2 + m3) * 4;
 
             m2 -= m1 + m4;
             m2 *= 5;
 
-            m0 += m5 + m2 + 16;
-            m0 >>= 5;
+            m0 += m5 + m2;
+            m0 = ShiftDivide<5, 16>(m0);
 
-            pDst[i] = std::max(0, std::min(m0, pixelMax));
+            pDst[i] = ClampIntToRange(m0, pixelMax);
         }
 
         for (intptr_t i = nWidth - 4; i < nWidth - 1; i++)
-            pDst[i] = (pSrc[i] + pSrc[i + 1] + 1) >> 1;
+            pDst[i] = AveragePixels(pSrc[i], pSrc[i + 1]);
 
         pDst[nWidth - 1] = pSrc[nWidth - 1];
         pDst += nPitch;
@@ -468,25 +474,24 @@ static void VerticalBicubic(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_REST
 
     nPitch /= sizeof(PixelType);
 
-    int pixelMax = (1 << bitsPerSample) - 1;
+    int pixelMax = PixelMaxValue<PixelType>(bitsPerSample);
 
     for (int j = 0; j < 1; j++) {
         for (int i = 0; i < nWidth; i++)
-            pDst[i] = (pSrc[i] + pSrc[i + nPitch] + 1) >> 1;
+            pDst[i] = AveragePixels(pSrc[i], pSrc[i + nPitch]);
         pDst += nPitch;
         pSrc += nPitch;
     }
     for (int j = 1; j < nHeight - 3; j++) {
         for (int i = 0; i < nWidth; i++) {
-            pDst[i] = std::min(pixelMax, std::max(0,
-                (-pSrc[i - nPitch] - pSrc[i + nPitch * 2] + (pSrc[i] + pSrc[i + nPitch]) * 9 + 8) >> 4));
+            pDst[i] = ClampIntToRange(ShiftDivide<4, 8>(-pSrc[i - nPitch] - pSrc[i + nPitch * 2] + (pSrc[i] + pSrc[i + nPitch]) * 9), pixelMax);
         }
         pDst += nPitch;
         pSrc += nPitch;
     }
     for (intptr_t j = nHeight - 3; j < nHeight - 1; j++) {
         for (int i = 0; i < nWidth; i++) {
-            pDst[i] = (pSrc[i] + pSrc[i + nPitch] + 1) >> 1;
+            pDst[i] = AveragePixels(pSrc[i], pSrc[i + nPitch]);
         }
 
         pDst += nPitch;
@@ -506,23 +511,21 @@ static void HorizontalBicubic(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RE
 
     nPitch /= sizeof(PixelType);
 
-    int pixelMax = (1 << bitsPerSample) - 1;
+    int pixelMax = PixelMaxValue<PixelType>(bitsPerSample);
 
     for (int j = 0; j < nHeight; j++) {
-        pDst[0] = (pSrc[0] + pSrc[1] + 1) >> 1;
+        pDst[0] = AveragePixels(pSrc[0], pSrc[1]);
         for (int i = 1; i < nWidth - 3; i++) {
-            pDst[i] = std::min(pixelMax, std::max(0,
-                (-(pSrc[i - 1] + pSrc[i + 2]) + (pSrc[i] + pSrc[i + 1]) * 9 + 8) >> 4));
+            pDst[i] = ClampIntToRange(ShiftDivide<4, 8>(-(pSrc[i - 1] + pSrc[i + 2]) + (pSrc[i] + pSrc[i + 1]) * 9), pixelMax);
         }
         for (intptr_t i = nWidth - 3; i < nWidth - 1; i++)
-            pDst[i] = (pSrc[i] + pSrc[i + 1] + 1) >> 1;
+            pDst[i] = AveragePixels(pSrc[i], pSrc[i + 1]);
 
         pDst[nWidth - 1] = pSrc[nWidth - 1];
         pDst += nPitch;
         pSrc += nPitch;
     }
 }
-
 
 template <typename PixelType>
 static void Average2(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RESTRICT pSrc18, const uint8_t *MVU_RESTRICT pSrc28,
@@ -535,14 +538,13 @@ static void Average2(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RESTRICT pS
 
     for (int j = 0; j < nHeight; j++) {
         for (int i = 0; i < nWidth; i++)
-            pDst[i] = (pSrc1[i] + pSrc2[i] + 1) >> 1;
+            pDst[i] = AveragePixels(pSrc1[i], pSrc2[i]);
 
         pDst += nPitch;
         pSrc1 += nPitch;
         pSrc2 += nPitch;
     }
 }
-
 
 template<typename PixelType>
 void PyramidPlane::GeneratePelPlanes(int pel, SharpParam sharp, VSCore *core, const VSAPI *vsapi) noexcept {
@@ -885,11 +887,17 @@ void FramePyramid::SharedInit(const VSFrame *srcFrame, int levels, int nBlkSizeX
             for (int i = 1; i < levels; i++)
                 pyramidLevels[i].planes[plane].ReducePlane<uint8_t>(pyramidLevels[i - 1].planes[plane], xRatioUV, yRatioUV, rFilter, tempBuffer.get(), core, vsapi);
         }
-    } else {
+    } else if (srcFormat->bytesPerSample == 2) {
         for (int plane = 0; plane < (chroma ? 3 : 1); plane++) {
             pyramidLevels[0].planes[plane].CopyAndPadPlane<uint16_t>(srcFrame, plane, nHPad[plane], nVPad[plane], nWidth[plane] - nRealWidth[plane], nHeight[plane] - nRealHeight[plane], nPel, core, vsapi);
             for (int i = 1; i < levels; i++)
                 pyramidLevels[i].planes[plane].ReducePlane<uint16_t>(pyramidLevels[i - 1].planes[plane], xRatioUV, yRatioUV, rFilter, tempBuffer.get(), core, vsapi);
+        }
+    } else {
+        for (int plane = 0; plane < (chroma ? 3 : 1); plane++) {
+            pyramidLevels[0].planes[plane].CopyAndPadPlane<float>(srcFrame, plane, nHPad[plane], nVPad[plane], nWidth[plane] - nRealWidth[plane], nHeight[plane] - nRealHeight[plane], nPel, core, vsapi);
+            for (int i = 1; i < levels; i++)
+                pyramidLevels[i].planes[plane].ReducePlane<float>(pyramidLevels[i - 1].planes[plane], xRatioUV, yRatioUV, rFilter, tempBuffer.get(), core, vsapi);
         }
     }
 }
@@ -1052,6 +1060,9 @@ void FramePyramid::GeneratePelPlanes(SharpParam sharp, VSCore *core, const VSAPI
     if (bitsPerSample == 8) {
         for (int plane = 0; plane < (chroma ? 3 : 1); plane++)
             pyramidLevels[0].planes[plane].GeneratePelPlanes<uint8_t>(nPel, sharp, core, vsapi);
+    } else if (bitsPerSample == 32) {
+        for (int plane = 0; plane < (chroma ? 3 : 1); plane++)
+            pyramidLevels[0].planes[plane].GeneratePelPlanes<float>(nPel, sharp, core, vsapi);
     } else {
         for (int plane = 0; plane < (chroma ? 3 : 1); plane++)
             pyramidLevels[0].planes[plane].GeneratePelPlanes<uint16_t>(nPel, sharp, core, vsapi);
@@ -1079,6 +1090,9 @@ void FramePyramid::SetExternalPelPlanes(const VSFrame *pelFrame, VSCore *core, c
     if (bitsPerSample == 8) {
         for (int plane = 0; plane < (chroma ? 3 : 1); plane++)
             pyramidLevels[0].planes[plane].SetExternalPelPlanes<uint8_t>(pelFrame, nPel, plane, core, vsapi);
+    } else if (bitsPerSample == 32) {
+        for (int plane = 0; plane < (chroma ? 3 : 1); plane++)
+            pyramidLevels[0].planes[plane].SetExternalPelPlanes<float>(pelFrame, nPel, plane, core, vsapi);
     } else {
         for (int plane = 0; plane < (chroma ? 3 : 1); plane++)
             pyramidLevels[0].planes[plane].SetExternalPelPlanes<uint16_t>(pelFrame, nPel, plane, core, vsapi);

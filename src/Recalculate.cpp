@@ -191,7 +191,7 @@ static void VS_CC recalculateCreate(const VSMap *in, VSMap *out, [[maybe_unused]
 
         d->nPel = super.nPel;
 
-        if (!vectors.IsCompatibleForAnalysis(super))
+        if (!vectors.IsCompatibleForRecalc(super))
             throw std::runtime_error("wrong source or super clip frame size");
 
     } catch (const std::exception &e) {

@@ -3,6 +3,7 @@
 #include <vector>
 #include <stdexcept>
 #include <cstring>
+#include <algorithm>
 #ifdef _WIN32
 #include <malloc.h>
 #else 
@@ -115,3 +116,44 @@ inline bool GetTopField(const VSFrame *propsSrc, int n, bool tff_exists, bool tf
 inline int ComputeFieldShift(bool src_top_field, bool ref_top_field, int nPel) noexcept {
     return (src_top_field && !ref_top_field) ? nPel / 2 : ((ref_top_field && !src_top_field) ? -(nPel / 2) : 0);
 }
+
+template <typename PixelType>
+static constexpr PixelType AveragePixels(PixelType p1, PixelType p2) noexcept {
+    if constexpr (std::is_integral_v<PixelType>)
+        return (p1 + p2 + 1) >> 1;
+    else
+        return (p1 + p2) * 0.5f;
+}
+
+template <typename PixelType>
+static constexpr PixelType AveragePixels(PixelType p1, PixelType p2, PixelType p3, PixelType p4) noexcept {
+    if constexpr (std::is_integral_v<PixelType>)
+        return (p1 + p2 + p3 + p4 + 2) >> 2;
+    else
+        return (p1 + p2 + p3 + p4) * 0.25f;
+}
+
+template <typename T>
+static constexpr T ClampIntToRange(T p, int maxVal) noexcept {
+    if constexpr (std::is_integral_v<T>)
+        return std::clamp(p, 0, maxVal);
+    else
+        return p;
+}
+
+template <int rShift, int roundBias, typename T>
+static constexpr T ShiftDivide(T p) noexcept {
+    if constexpr (std::is_integral_v<T>)
+        return (p + roundBias) >> rShift;
+    else
+        return p / (1 << rShift);
+}
+
+template <typename PixelType>
+static constexpr int PixelMaxValue(int bitsPerSample) noexcept {
+    if constexpr (std::is_integral_v<PixelType>)
+        return (1 << bitsPerSample) - 1;
+    else
+        return 0;
+}
+

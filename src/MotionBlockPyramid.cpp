@@ -1052,13 +1052,20 @@ void MotionBlockLevel::SearchMVs(const FramePyramidLevel &pSrcFrame, const Frame
             DoSearchMVs<1, uint8_t>(pSrcFrame, pRefFrame, st, stp, lambda, lsad, pnew, plevel, globalMVec, fieldShift, pzero, pglobal, badSAD, badrange, meander, tryMany, chroma);
         else
             DoSearchMVs<2, uint8_t>(pSrcFrame, pRefFrame, st, stp, lambda, lsad, pnew, plevel, globalMVec, fieldShift, pzero, pglobal, badSAD, badrange, meander, tryMany, chroma);
-    } else {
+    } else if (bytesPerSample == 2) {
         if (nLogPel == 0)
             DoSearchMVs<0, uint16_t>(pSrcFrame, pRefFrame, st, stp, lambda, lsad, pnew, plevel, globalMVec, fieldShift, pzero, pglobal, badSAD, badrange, meander, tryMany, chroma);
         else if (nLogPel == 1)
             DoSearchMVs<1, uint16_t>(pSrcFrame, pRefFrame, st, stp, lambda, lsad, pnew, plevel, globalMVec, fieldShift, pzero, pglobal, badSAD, badrange, meander, tryMany, chroma);
         else
             DoSearchMVs<2, uint16_t>(pSrcFrame, pRefFrame, st, stp, lambda, lsad, pnew, plevel, globalMVec, fieldShift, pzero, pglobal, badSAD, badrange, meander, tryMany, chroma);
+    } else {
+        if (nLogPel == 0)
+            DoSearchMVs<0, float>(pSrcFrame, pRefFrame, st, stp, lambda, lsad, pnew, plevel, globalMVec, fieldShift, pzero, pglobal, badSAD, badrange, meander, tryMany, chroma);
+        else if (nLogPel == 1)
+            DoSearchMVs<1, float>(pSrcFrame, pRefFrame, st, stp, lambda, lsad, pnew, plevel, globalMVec, fieldShift, pzero, pglobal, badSAD, badrange, meander, tryMany, chroma);
+        else
+            DoSearchMVs<2, float>(pSrcFrame, pRefFrame, st, stp, lambda, lsad, pnew, plevel, globalMVec, fieldShift, pzero, pglobal, badSAD, badrange, meander, tryMany, chroma);
     }
 }
 
@@ -1339,13 +1346,20 @@ void MotionBlockLevel::RecalculateMVs(const FramePyramidLevel &pSrcFrame, const 
             DoRecalculateMVs<1, uint8_t>(pSrcFrame, pRefFrame, nBlkSizeX, nBlkSizeY, nOverlapX, nOverlapY, chroma, st, stp, lambda, pnew, fieldShift, thSAD, smooth, meander, useSatd);
         else
             DoRecalculateMVs<2, uint8_t>(pSrcFrame, pRefFrame, nBlkSizeX, nBlkSizeY, nOverlapX, nOverlapY, chroma, st, stp, lambda, pnew, fieldShift, thSAD, smooth, meander, useSatd);
-    } else {
+    } else if (bytesPerSample == 2) {
         if (nLogPel == 0)
             DoRecalculateMVs<0, uint16_t>(pSrcFrame, pRefFrame, nBlkSizeX, nBlkSizeY, nOverlapX, nOverlapY, chroma, st, stp, lambda, pnew, fieldShift, thSAD, smooth, meander, useSatd);
         else if (nLogPel == 1)
             DoRecalculateMVs<1, uint16_t>(pSrcFrame, pRefFrame, nBlkSizeX, nBlkSizeY, nOverlapX, nOverlapY, chroma, st, stp, lambda, pnew, fieldShift, thSAD, smooth, meander, useSatd);
         else
             DoRecalculateMVs<2, uint16_t>(pSrcFrame, pRefFrame, nBlkSizeX, nBlkSizeY, nOverlapX, nOverlapY, chroma, st, stp, lambda, pnew, fieldShift, thSAD, smooth, meander, useSatd);
+    } else {
+        if (nLogPel == 0)
+            DoRecalculateMVs<0, float>(pSrcFrame, pRefFrame, nBlkSizeX, nBlkSizeY, nOverlapX, nOverlapY, chroma, st, stp, lambda, pnew, fieldShift, thSAD, smooth, meander, useSatd);
+        else if (nLogPel == 1)
+            DoRecalculateMVs<1, float>(pSrcFrame, pRefFrame, nBlkSizeX, nBlkSizeY, nOverlapX, nOverlapY, chroma, st, stp, lambda, pnew, fieldShift, thSAD, smooth, meander, useSatd);
+        else
+            DoRecalculateMVs<2, float>(pSrcFrame, pRefFrame, nBlkSizeX, nBlkSizeY, nOverlapX, nOverlapY, chroma, st, stp, lambda, pnew, fieldShift, thSAD, smooth, meander, useSatd);
     }
 }
 

@@ -127,9 +127,9 @@ static void VS_CC superCreate(const VSMap *in, VSMap *out, [[maybe_unused]] void
         d->node = vsapi->mapGetNode(in, "clip", 0, nullptr);
         d->vi = *vsapi->getVideoInfo(d->node);
 
-        if (!vsh::isConstantVideoFormat(&d->vi) || d->vi.format.bitsPerSample > 16 || d->vi.format.sampleType != stInteger ||
+        if (!vsh::isConstantVideoFormat(&d->vi) || (d->vi.format.bitsPerSample > 16 && d->vi.format.sampleType == stInteger) || (d->vi.format.bitsPerSample != 32 && d->vi.format.sampleType == stFloat) ||
             d->vi.format.subSamplingW > 1 || d->vi.format.subSamplingH > 1 || (d->vi.format.colorFamily != cfYUV && d->vi.format.colorFamily != cfGray))
-            throw std::runtime_error("input clip must be GRAY, YUV420, YUV422, YUV440, or YUV444, up to 16 bits, with constant dimensions");
+            throw std::runtime_error("input clip must be GRAY, YUV420, YUV422, YUV440, or YUV444, up to 16 bits integer or 32 bit float, with constant dimensions");
 
         int xRatioUV = 1 << d->vi.format.subSamplingW;
         int yRatioUV = 1 << d->vi.format.subSamplingH;
