@@ -395,10 +395,7 @@ static void VS_CC compensateCreate(const VSMap *in, VSMap *out, [[maybe_unused]]
         {d->vectors, rpNoFrameReuse},
     };
 
-    auto getFilterFn = d->vi->format.bytesPerSample == 1 ? compensateGetFrame<uint8_t> : compensateGetFrame<uint16_t>;
-    if (d->vi->format.bytesPerSample == 4)
-        getFilterFn = compensateGetFrame<float>;
-    vsapi->createVideoFilter(out, "Compensate", d->vi, getFilterFn, filterFree<CompensateData>, fmParallel, deps, ARRAY_SIZE(deps), d.get(), core);
+    vsapi->createVideoFilter(out, "Compensate", d->vi, SelectOnBitsPerSample(d->vi->format.bitsPerSample, compensateGetFrame<uint8_t>, compensateGetFrame<uint16_t>, compensateGetFrame<float>), filterFree<CompensateData>, fmParallel, deps, ARRAY_SIZE(deps), d.get(), core);
     d.release();
 }
 

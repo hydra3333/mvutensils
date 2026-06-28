@@ -389,11 +389,7 @@ static void VS_CC flowfpsCreate(const VSMap *in, VSMap *out, [[maybe_unused]] vo
         {d->mvfw, rpGeneral},
     };
 
-    auto getFilterFn = d->vi.format.bytesPerSample == 1 ? flowfpsGetFrame<uint8_t> : flowfpsGetFrame<uint16_t>;
-    if (d->vi.format.bytesPerSample == 4)
-        getFilterFn = flowfpsGetFrame<float>;
-
-    vsapi->createVideoFilter(out, "FlowFPS", &d->vi, getFilterFn, filterFree<FlowFPSData>, fmParallel, deps, ARRAY_SIZE(deps), d.get(), core);
+    vsapi->createVideoFilter(out, "FlowFPS", &d->vi, SelectOnBitsPerSample(d->vi.format.bitsPerSample, flowfpsGetFrame<uint8_t>, flowfpsGetFrame<uint16_t>, flowfpsGetFrame<float>), filterFree<FlowFPSData>, fmParallel, deps, ARRAY_SIZE(deps), d.get(), core);
     d.release();
 }
 

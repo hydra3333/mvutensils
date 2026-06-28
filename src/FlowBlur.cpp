@@ -303,11 +303,7 @@ static void VS_CC flowblurCreate(const VSMap *in, VSMap *out, [[maybe_unused]] v
         {d->mvfw, rpGeneral}, 
     };
 
-    auto getFilterFn = d->vi->format.bytesPerSample == 1 ? flowblurGetFrame<uint8_t> : flowblurGetFrame<uint16_t>;
-    if (d->vi->format.bytesPerSample == 4)
-        getFilterFn = flowblurGetFrame<float>;
-
-    vsapi->createVideoFilter(out, "FlowBlur", d->vi, getFilterFn, filterFree<FlowBlurData>, fmParallel, deps, ARRAY_SIZE(deps), d.get(), core);
+    vsapi->createVideoFilter(out, "FlowBlur", d->vi, SelectOnBitsPerSample(d->vi->format.bitsPerSample, flowblurGetFrame<uint8_t>, flowblurGetFrame<uint16_t>, flowblurGetFrame<float>), filterFree<FlowBlurData>, fmParallel, deps, ARRAY_SIZE(deps), d.get(), core);
     d.release();
 }
 

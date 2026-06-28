@@ -595,11 +595,7 @@ static void VS_CC degrainCreate(const VSMap *in, VSMap *out, [[maybe_unused]] vo
 
         assert(numDeps == deps.size());
 
-        auto getFilterFn = d->vi->format.bytesPerSample == 1 ? degrainGetFrame<radius, uint8_t> : degrainGetFrame<radius, uint16_t>;
-        if (d->vi->format.bytesPerSample == 4)
-            getFilterFn = degrainGetFrame<radius, float>;
-
-        vsapi->createVideoFilter(out, d->filterName.c_str(), d->vi, getFilterFn, filterFree<DegrainData<radius>>, fmParallel, deps.data(), numDeps, d.get(), core);
+        vsapi->createVideoFilter(out, d->filterName.c_str(), d->vi, SelectOnBitsPerSample(d->vi->format.bitsPerSample, degrainGetFrame<radius, uint8_t>, degrainGetFrame<radius, uint16_t>, degrainGetFrame<radius, float>), filterFree<DegrainData<radius>>, fmParallel, deps.data(), numDeps, d.get(), core);
         d.release();
 
     } catch (const std::exception &e) {
