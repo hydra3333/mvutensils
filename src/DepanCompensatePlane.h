@@ -28,7 +28,7 @@
 // move plane of nextp frame to dstp for motion compensation by trc, trm with NEAREST pixels
 //
 template <typename PixelType>
-static void compensate_plane_nearest(uint8_t * MVU_RESTRICT dstp8, const uint8_t * MVU_RESTRICT srcp8, ptrdiff_t pitch, int row_size, int height, const transform *tr, int mirror, int border, int *work1row_size, int blurmax, int pixel_max) {
+static void compensate_plane_nearest(uint8_t * MVU_RESTRICT dstp8, const uint8_t * MVU_RESTRICT srcp8, ptrdiff_t pitch, int row_size, int height, const transform *tr, int mirror, int border, int *work1row_size, int blurmax) {
     // if border >=0, then we fill empty edge (border) pixels by that value
     // work1row_size is work array, it must have size >= 1*row_size
 
@@ -233,7 +233,7 @@ static void compensate_plane_nearest(uint8_t * MVU_RESTRICT dstp8, const uint8_t
 //   t[0] = dxc, t[1] = dxx, t[2] = dxy, t[3] = dyc, t[4] = dyx, t[5] = dyy
 //
 template <typename PixelType>
-static void compensate_plane_bilinear(uint8_t * MVU_RESTRICT dstp8, const uint8_t * MVU_RESTRICT srcp8, ptrdiff_t pitch, int row_size, int height, const transform *tr, int mirror, int border, int *work2row_size, int blurmax, int pixel_max) {
+static void compensate_plane_bilinear(uint8_t * MVU_RESTRICT dstp8, const uint8_t * MVU_RESTRICT srcp8, ptrdiff_t pitch, int row_size, int height, const transform *tr, int mirror, int border, int *work2row_size, int blurmax) {
     // work2row_size is work array, it must have size >= 2*row_size
 
     const PixelType *srcp = (const PixelType *)srcp8;

@@ -158,16 +158,16 @@ static const VSFrame *VS_CC depanCompensateGetFrame(int ndest, int activationRea
 
                 if (d->vi->format.bytesPerSample == 1) {
                     if (d->subpixel == 0)
-                        compensate_plane_nearest<uint8_t>(dstp, srcp, src_pitch, src_width, src_height, &tr[plane], d->mirror, border[plane], work2width4356.data(), blur[plane], d->pixel_max);
+                        compensate_plane_nearest<uint8_t>(dstp, srcp, src_pitch, src_width, src_height, &tr[plane], d->mirror, border[plane], work2width4356.data(), blur[plane]);
                     else if (d->subpixel == 1)
-                        compensate_plane_bilinear<uint8_t>(dstp, srcp, src_pitch, src_width, src_height, &tr[plane], d->mirror, border[plane], work2width4356.data(), blur[plane], d->pixel_max);
+                        compensate_plane_bilinear<uint8_t>(dstp, srcp, src_pitch, src_width, src_height, &tr[plane], d->mirror, border[plane], work2width4356.data(), blur[plane]);
                     else
                         compensate_plane_bicubic<uint8_t>(dstp, srcp, src_pitch, src_width, src_height, &tr[plane], d->mirror, border[plane], work2width4356.data(), blur[plane], d->pixel_max);
                 } else {
                     if (d->subpixel == 0)
-                        compensate_plane_nearest<uint16_t>(dstp, srcp, src_pitch, src_width, src_height, &tr[plane], d->mirror, border[plane], work2width4356.data(), blur[plane], d->pixel_max);
+                        compensate_plane_nearest<uint16_t>(dstp, srcp, src_pitch, src_width, src_height, &tr[plane], d->mirror, border[plane], work2width4356.data(), blur[plane]);
                     else if (d->subpixel == 1)
-                        compensate_plane_bilinear<uint16_t>(dstp, srcp, src_pitch, src_width, src_height, &tr[plane], d->mirror, border[plane], work2width4356.data(), blur[plane], d->pixel_max);
+                        compensate_plane_bilinear<uint16_t>(dstp, srcp, src_pitch, src_width, src_height, &tr[plane], d->mirror, border[plane], work2width4356.data(), blur[plane]);
                     else
                         compensate_plane_bicubic<uint16_t>(dstp, srcp, src_pitch, src_width, src_height, &tr[plane], d->mirror, border[plane], work2width4356.data(), blur[plane], d->pixel_max);
                 }
