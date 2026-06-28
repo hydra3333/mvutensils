@@ -25,14 +25,14 @@ enum VectorOrder {
 };
 
 
-typedef void (*DenoiseFunction)(uint8_t *pDst, ptrdiff_t nDstPitch, const uint8_t *pSrc, ptrdiff_t nSrcPitch, const uint8_t **_pRefs, const ptrdiff_t *nRefPitches, uint16_t WSrc, const uint16_t *WRefs) noexcept;
+typedef void (*DenoiseFunction)(uint8_t *pDst, ptrdiff_t nDstPitch, const uint8_t *pSrc, ptrdiff_t nSrcPitch, const uint8_t **_pRefs, ptrdiff_t nRefPitch, uint16_t WSrc, const uint16_t *WRefs) noexcept;
 
 
 // XXX Both Degrain_C8/Degrain_C16 move the pointers passed in pRefs8. This is okay
 // because they are not used after the function is done with them.
 
 template <int radius, int blockWidth, int blockHeight>
-static void Degrain_C8(uint8_t * MVU_RESTRICT pDst8, ptrdiff_t nDstPitch, const uint8_t * MVU_RESTRICT pSrc8, ptrdiff_t nSrcPitch, const uint8_t ** MVU_RESTRICT pRefs8, const ptrdiff_t * MVU_RESTRICT nRefPitches, uint16_t WSrc, const uint16_t * MVU_RESTRICT WRefs) noexcept {
+static void Degrain_C8(uint8_t * MVU_RESTRICT pDst8, ptrdiff_t nDstPitch, const uint8_t * MVU_RESTRICT pSrc8, ptrdiff_t nSrcPitch, const uint8_t ** MVU_RESTRICT pRefs8, ptrdiff_t nRefPitch, uint16_t WSrc, const uint16_t * MVU_RESTRICT WRefs) noexcept {
     const uint16_t wsrc = WSrc;
     uint16_t wref[radius * 2];
     for (int r = 0; r < radius * 2; r++)
@@ -54,12 +54,12 @@ static void Degrain_C8(uint8_t * MVU_RESTRICT pDst8, ptrdiff_t nDstPitch, const 
         pDst8 += nDstPitch;
         pSrc8 += nSrcPitch;
         for (int r = 0; r < radius * 2; r++)
-            pRefs8[r] += nRefPitches[r];
+            pRefs8[r] += nRefPitch;
     }
 }
 
 template <int radius, int blockWidth, int blockHeight>
-static void Degrain_C16(uint8_t * MVU_RESTRICT pDst8, ptrdiff_t nDstPitch, const uint8_t * MVU_RESTRICT pSrc8, ptrdiff_t nSrcPitch, const uint8_t ** MVU_RESTRICT pRefs8, const ptrdiff_t * MVU_RESTRICT nRefPitches, uint16_t WSrc, const uint16_t * MVU_RESTRICT WRefs) noexcept {
+static void Degrain_C16(uint8_t * MVU_RESTRICT pDst8, ptrdiff_t nDstPitch, const uint8_t * MVU_RESTRICT pSrc8, ptrdiff_t nSrcPitch, const uint8_t ** MVU_RESTRICT pRefs8, ptrdiff_t nRefPitch, uint16_t WSrc, const uint16_t * MVU_RESTRICT WRefs) noexcept {
     const int wsrc = WSrc;
     int wref[radius * 2];
     for (int r = 0; r < radius * 2; r++)
@@ -83,12 +83,12 @@ static void Degrain_C16(uint8_t * MVU_RESTRICT pDst8, ptrdiff_t nDstPitch, const
         pDst8 += nDstPitch;
         pSrc8 += nSrcPitch;
         for (int r = 0; r < radius * 2; r++)
-            pRefs8[r] += nRefPitches[r];
+            pRefs8[r] += nRefPitch;
     }
 }
 
 template <int radius, int blockWidth, int blockHeight>
-static void Degrain_F32(uint8_t *MVU_RESTRICT pDst8, ptrdiff_t nDstPitch, const uint8_t *MVU_RESTRICT pSrc8, ptrdiff_t nSrcPitch, const uint8_t **MVU_RESTRICT pRefs8, const ptrdiff_t *MVU_RESTRICT nRefPitches, uint16_t WSrc, const uint16_t *MVU_RESTRICT WRefs) noexcept {
+static void Degrain_F32(uint8_t *MVU_RESTRICT pDst8, ptrdiff_t nDstPitch, const uint8_t *MVU_RESTRICT pSrc8, ptrdiff_t nSrcPitch, const uint8_t **MVU_RESTRICT pRefs8, ptrdiff_t nRefPitch, uint16_t WSrc, const uint16_t *MVU_RESTRICT WRefs) noexcept {
     const float wsrc = WSrc;
     float wref[radius * 2];
     for (int r = 0; r < radius * 2; r++)
@@ -112,7 +112,7 @@ static void Degrain_F32(uint8_t *MVU_RESTRICT pDst8, ptrdiff_t nDstPitch, const 
         pDst8 += nDstPitch;
         pSrc8 += nSrcPitch;
         for (int r = 0; r < radius * 2; r++)
-            pRefs8[r] += nRefPitches[r];
+            pRefs8[r] += nRefPitch;
     }
 }
 
@@ -123,7 +123,7 @@ void selectDegrainFunctionAVX2(unsigned radius, unsigned width, unsigned height,
 void selectDegrainFunctionAVX512(unsigned radius, unsigned width, unsigned height, unsigned bits, DenoiseFunction &degrain) noexcept;
 
 template <int radius, int blockWidth, int blockHeight>
-static void Degrain_sse2(uint8_t * MVU_RESTRICT pDst, ptrdiff_t nDstPitch, const uint8_t * MVU_RESTRICT pSrc, ptrdiff_t nSrcPitch, const uint8_t ** MVU_RESTRICT pRefs, const ptrdiff_t * MVU_RESTRICT nRefPitches, uint16_t WSrc, const uint16_t * MVU_RESTRICT WRefs) noexcept {
+static void Degrain_sse2(uint8_t * MVU_RESTRICT pDst, ptrdiff_t nDstPitch, const uint8_t * MVU_RESTRICT pSrc, ptrdiff_t nSrcPitch, const uint8_t ** MVU_RESTRICT pRefs, ptrdiff_t nRefPitch, uint16_t WSrc, const uint16_t * MVU_RESTRICT WRefs) noexcept {
     static_assert(blockWidth >= 4, "");
 
     __m128i zero = _mm_setzero_si128();
@@ -185,8 +185,8 @@ static void Degrain_sse2(uint8_t * MVU_RESTRICT pDst, ptrdiff_t nDstPitch, const
         pDst += nDstPitch;
         pSrc += nSrcPitch;
         for(int i = 0; i < radius * 2; i += 2) {
-            pRefs[i] += nRefPitches[i];
-            pRefs[i + 1] += nRefPitches[i + 1];
+            pRefs[i] += nRefPitch;
+            pRefs[i + 1] += nRefPitch;
         }
     }
 }
@@ -237,18 +237,18 @@ static inline uint16_t DegrainWeight(int64_t thSAD, int64_t blockSAD) noexcept {
 }
 
 template<typename PixelType>
-static inline void useBlock(const uint8_t *&p, ptrdiff_t &np, uint16_t &WRef, int isUsable, const std::optional<MotionBlockPyramid> &blocks, int i, const FramePyramidLevel *pPlane, const uint8_t **pSrcCur, int xx, const ptrdiff_t *nSrcPitch, int nLogPel, int plane, int xSubUV, int ySubUV, const int64_t *thSAD) noexcept {
+static inline void useBlock(const uint8_t *&p, uint16_t &WRef, int isUsable, const std::optional<MotionBlockPyramid> &blocks, int i, const FramePyramidLevel *pPlane, const uint8_t **pSrcCur, int xx, int nLogPel, int plane, int xSubUV, int ySubUV, const int64_t *thSAD) noexcept {
+    // Resolves only the block pointer and its weight; the row stride is identical for every block of a plane
+    // (all come from the same super clip), so the caller computes nRefPitch once instead of per block here.
     if (isUsable) {
         const BlockData block = blocks->GetBlock(i);
         int blx = (block.x << nLogPel) + block.vector.x;
         int bly = (block.y << nLogPel) + block.vector.y;
         p = pPlane->planes[plane].GetPointer<PixelType>(plane ? blx >> xSubUV : blx, plane ? bly >> ySubUV : bly);
-        np = pPlane->planes[plane].nPitch;
         int64_t blockSAD = block.vector.sad;
         WRef = DegrainWeight(thSAD[plane], blockSAD);
     } else {
         p = pSrcCur[plane] + xx;
-        np = nSrcPitch[plane];
         WRef = 0;
     }
 }

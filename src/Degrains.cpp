@@ -211,6 +211,8 @@ static const VSFrame *VS_CC degrainGetFrame(int n, int activationReason, void *i
                 if (!d->process[plane])
                     continue;
 
+                const ptrdiff_t nRefPitch = nSrcPitches[plane];
+
                 if (nOverlapX[0] == 0 && nOverlapY[0] == 0) {
                     const int frameW = vsapi->getFrameWidth(dst, plane);
                     const int frameH = vsapi->getFrameHeight(dst, plane);
@@ -226,11 +228,10 @@ static const VSFrame *VS_CC degrainGetFrame(int n, int activationReason, void *i
                             int i = by * nBlkX + bx;
 
                             const uint8_t *pointers[radius * 2];
-                            ptrdiff_t strides[radius * 2];
                             uint16_t WSrc, WRefs[radius * 2];
 
                             for (int r = 0; r < radius * 2; r++)
-                                useBlock<PixelType>(pointers[r], strides[r], WRefs[r], isUsable[r], fgops[r], i, pPlanes[r], pSrcCur, xx, nSrcPitches, nLogPel, plane, xSubUV, ySubUV, thSAD);
+                                useBlock<PixelType>(pointers[r], WRefs[r], isUsable[r], fgops[r], i, pPlanes[r], pSrcCur, xx, nLogPel, plane, xSubUV, ySubUV, thSAD);
 
                             normaliseWeights<radius>(WSrc, WRefs);
 
@@ -240,11 +241,11 @@ static const VSFrame *VS_CC degrainGetFrame(int n, int activationReason, void *i
                             if (validW == nBlkSizeX[plane] && validH == nBlkSizeY[plane]) {
                                 // Block fits entirely — write directly
                                 d->DEGRAIN[plane](pDstCur[plane] + xx, nDstPitches[plane], pSrcCur[plane] + xx, nSrcPitches[plane],
-                                    pointers, strides, WSrc, WRefs);
+                                    pointers, nRefPitch, WSrc, WRefs);
                             } else if (validW > 0) {
                                 // Edge block — write to tmpBlock, then copy only the valid region
                                 d->DEGRAIN[plane](tmpBlock, tmpBlockPitch, pSrcCur[plane] + xx, nSrcPitches[plane],
-                                    pointers, strides, WSrc, WRefs);
+                                    pointers, nRefPitch, WSrc, WRefs);
                                 mvu_bitblt(pDstCur[plane] + xx, nDstPitches[plane],
                                     tmpBlock, tmpBlockPitch,
                                     validW * bytesPerSample, validH);
@@ -280,17 +281,16 @@ static const VSFrame *VS_CC degrainGetFrame(int n, int activationReason, void *i
                             int i = by * nBlkX + bx;
 
                             const uint8_t *pointers[radius * 2]; // Moved by the degrain function.
-                            ptrdiff_t strides[radius * 2];
 
                             uint16_t WSrc, WRefs[radius * 2];
 
                             for (int r = 0; r < radius * 2; r++)
-                                useBlock<PixelType>(pointers[r], strides[r], WRefs[r], isUsable[r], fgops[r], i, pPlanes[r], pSrcCur, xx, nSrcPitches, nLogPel, plane, xSubUV, ySubUV, thSAD);
+                                useBlock<PixelType>(pointers[r], WRefs[r], isUsable[r], fgops[r], i, pPlanes[r], pSrcCur, xx, nLogPel, plane, xSubUV, ySubUV, thSAD);
 
                             normaliseWeights<radius>(WSrc, WRefs);
 
                             d->DEGRAIN[plane](tmpBlock, tmpBlockPitch, pSrcCur[plane] + xx, nSrcPitches[plane],
-                                pointers, strides,
+                                pointers, nRefPitch,
                                 WSrc, WRefs);
                             // accumulator is 1x pixel width for float, 2x for 8/16-bit integer.
                             constexpr int accRatio = std::is_floating_point_v<PixelType> ? 1 : 2;
