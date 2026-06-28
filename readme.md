@@ -80,6 +80,10 @@ out  = core.mvu.Degrain(clip, super, [mvbw, mvfw])  # vectors passed as a list
 * [VectorLengthMask / SADMask / OcclusionMask](#vectorlengthmask--sadmask--occlusionmask)
 * [SCDetection](#scdetection)
 * [Depan functions](#depan-functions)
+  * [DepanEstimate](#depanestimate)
+  * [DepanAnalyse](#depananalyse)
+  * [DepanStabilise](#depanstabilise)
+  * [DepanCompensate](#depancompensate)
 
 ## Quick start
 
@@ -402,17 +406,129 @@ core.mvu.SCDetection(clip clip, clip vectors[, int thscd1=400, int thscd2=130, s
 
 ## Depan functions
 
-The global-motion (camera pan/zoom/rotation) tools are carried over largely unchanged from mvtools,
-with fixed edge handling and minor speedups. They are the only filters **without** float support.
-Refer to the [mvtools2 documentation](https://github.com/pinterf/mvtools/blob/mvtools-pfmod/Documentation/mvtools2.html)
-for the detailed meaning of their parameters.
+The Depan filters deal with **global** (whole-frame) motion — camera pan, zoom and rotation —
+rather than the per-block local motion the rest of MVUtensils estimates. They are the only filters
+**without** float support, and are otherwise carried over from mvtools largely unchanged, with fixed
+edge handling and minor speedups. Fine-grained parameter meanings also match the mvtools `MDepan*`
+filters in the [mvtools2 documentation](https://github.com/pinterf/mvtools/blob/mvtools-pfmod/Documentation/mvtools2.html).
+
+They work in two stages:
+
+1. **Measure** the global motion of every frame, producing a small *data* clip that carries the
+   transform (dx, dy, zoom, rotation) as frame properties. Use **DepanEstimate** to measure it
+   directly from the image, or **DepanAnalyse** to fit it from an existing MVUtensils vector clip.
+2. **Apply** that data clip: **DepanStabilise** smooths the camera trajectory to remove shake (while
+   keeping deliberate motion), and **DepanCompensate** shifts/zooms frames by the (optionally scaled)
+   global motion — e.g. to undo, re-apply or align a camera move.
 
 ```py
-core.mvu.DepanAnalyse(clip clip, clip vectors[, clip mask, int zoom, int rot, float pixaspect, float error, int info, float wrong, float zerow, int thscd1, int thscd2, int fields, int tff])
-core.mvu.DepanEstimate(clip clip[, float trust, int winx, int winy, int wleft, int wtop, int dxmax, int dymax, float zoommax, float stab, float pixaspect, int info, int show, int fields, int tff])
-core.mvu.DepanCompensate(clip clip, clip data[, float offset, int subpixel, float pixaspect, int matchfields, int mirror, int blur, int info, int fields, int tff])
-core.mvu.DepanStabilise(clip clip, clip data[, float cutoff, float damping, float initzoom, int addzoom, int prev, int next, int mirror, int blur, float dxmax, float dymax, float zoommax, float rotmax, int subpixel, float pixaspect, int fitlast, float tzoom, int info, int method, int fields])
+# Stabilise shaky footage, estimating motion straight from the pixels
+data = core.mvu.DepanEstimate(clip)
+out  = core.mvu.DepanStabilise(clip, data)
+
+# Or derive the global motion from block vectors instead
+sup  = core.mvu.Super(clip, blksize=8, overlap=4)
+data = core.mvu.DepanAnalyse(clip, core.mvu.Analyse(sup))
+out  = core.mvu.DepanStabilise(clip, data)
 ```
 
-All `Depan*` arguments except the leading clips are optional; their meanings and defaults match the
-mvtools `MDepan*` filters in the linked reference.
+### DepanEstimate
+
+Measures each frame's global motion (pan, optional zoom) directly from the image content and stores
+it as frame properties. Outputs a *data* clip for `DepanStabilise`/`DepanCompensate` (the pixels are
+the input passed through).
+
+```py
+core.mvu.DepanEstimate(clip clip[, float trust=4.0, int winx=0, int winy=0, int wleft=-1, int wtop=-1, int dxmax=-1, int dymax=-1, float zoommax=1.0, float stab=1.0, float pixaspect=1.0, bint info=False, bint show=False, bint fields=False, bint tff=False])
+```
+
+| Parameter | Type | Options (Default) | Description |
+| --- | --- | --- | --- |
+| clip | 8–16 bit integer, GRAY/YUV | | Clip to measure. |
+| trust | float | (4.0) | Trust limit for accepting an estimate; higher is more permissive. |
+| winx / winy | int | (0 = auto) | Size of the analysis window; 0 picks a sensible size. |
+| wleft / wtop | int | (-1 = centre) | Top-left corner of the analysis window; -1 centres it. |
+| dxmax / dymax | int | (-1 = auto) | Maximum expected horizontal / vertical motion in pixels. |
+| zoommax | float | (1.0) | Maximum expected zoom factor; 1.0 = pan only, no zoom. |
+| stab | float | (1.0) | Stability / smoothing factor of the estimate. |
+| pixaspect | float | (1.0) | Pixel aspect ratio. |
+| info | bint | (False) | Overlay the numeric estimate on the frame. |
+| show | bint | (False) | Visualise the estimated motion. |
+| fields / tff | bint | (False) | Field-based handling and top-field-first. |
+
+### DepanAnalyse
+
+Fits a single global transform (pan, optional zoom and rotation) to the per-block motion vectors of
+an MVUtensils `vectors` clip, producing the same kind of *data* clip as `DepanEstimate`.
+
+```py
+core.mvu.DepanAnalyse(clip clip, clip vectors[, clip mask=None, bint zoom=True, bint rot=True, float pixaspect=1.0, float error=15.0, bint info=False, float wrong=10.0, float zerow=0.05, int thscd1=400, int thscd2=130, bint fields=False, bint tff=False])
+```
+
+| Parameter | Type | Options (Default) | Description |
+| --- | --- | --- | --- |
+| clip | 8–16 bit integer, GRAY/YUV | | Source clip (passed through; carries the data). |
+| vectors | clip | (required) | MVUtensils vector clip whose block vectors are fitted. |
+| mask | clip | (None) | Optional mask selecting which regions of the field to trust. |
+| zoom | bint | (True) | Also estimate global zoom. |
+| rot | bint | (True) | Also estimate global rotation. |
+| pixaspect | float | (1.0) | Pixel aspect ratio. |
+| error | float | (15.0) | Error limit for accepting the global fit. |
+| wrong | float | (10.0) | Weight/penalty for vectors that disagree with the global motion. |
+| zerow | float | (0.05) | Weight given to the zero vector in the fit. |
+| info | bint | (False) | Overlay the numeric estimate on the frame. |
+| fields / tff | bint | (False) | Field-based handling and top-field-first. |
+
+### DepanStabilise
+
+Smooths the global-motion trajectory from a `data` clip (inertial high-pass filtering) and applies
+the inverse transform to remove camera shake while preserving intentional motion. Outputs the
+stabilised video.
+
+```py
+core.mvu.DepanStabilise(clip clip, clip data[, float cutoff=1.0, float damping=0.9, float initzoom=1.0, bint addzoom=False, int prev=0, int next=0, int mirror=0, int blur=0, float dxmax=60.0, float dymax=30.0, float zoommax=1.05, float rotmax=1.0, int subpixel=2, float pixaspect=1.0, int fitlast=0, float tzoom=3.0, bint info=False, int method=0, bint fields=False])
+```
+
+| Parameter | Type | Options (Default) | Description |
+| --- | --- | --- | --- |
+| clip | 8–16 bit integer, GRAY/YUV | | Clip to stabilise. |
+| data | clip | (required) | Global-motion data from `DepanEstimate`/`DepanAnalyse`. |
+| cutoff | float | (1.0) | Cutoff frequency (Hz) of the stabilisation filter; lower = smoother, slower correction. |
+| damping | float | (0.9) | Damping ratio of the filter. |
+| initzoom | float | (1.0) | Constant zoom applied to help hide exposed borders. |
+| addzoom | bint | (False) | Automatically add zoom to hide exposed borders. |
+| prev / next | int | (0) | Number of previous / following frames used in the trajectory fit. |
+| mirror | int | 0–15 (0) | Fill exposed borders by mirroring (bitmask of edges: 1=top, 2=bottom, 4=left, 8=right). |
+| blur | int | (0) | Blur width applied to the mirrored border region. |
+| dxmax / dymax | float | (60.0 / 30.0) | Maximum correction in pixels. |
+| zoommax | float | (1.05) | Maximum zoom correction. |
+| rotmax | float | (1.0) | Maximum rotation correction in degrees. |
+| subpixel | int | 0–2 (2) | Subpixel interpolation: 0=none, 1=bilinear, 2=bicubic. |
+| pixaspect | float | (1.0) | Pixel aspect ratio. |
+| fitlast | int | (0) | Number of trailing frames specially fitted for the clip end. |
+| tzoom | float | (3.0) | Time window (frames) over which zoom is smoothed. |
+| info | bint | (False) | Overlay diagnostic info on the frame. |
+| method | int | (0) | Stabilisation method variant. |
+| fields | bint | (False) | Field-based handling. |
+
+### DepanCompensate
+
+Warps each frame by the global motion in a `data` clip (scaled by `offset`) — e.g. to compensate for
+or reproduce a camera move, or to align frames. Outputs the warped video.
+
+```py
+core.mvu.DepanCompensate(clip clip, clip data[, float offset=0.0, int subpixel=2, float pixaspect=1.0, bint matchfields=True, int mirror=0, int blur=0, bint info=False, bint fields=False, bint tff=False])
+```
+
+| Parameter | Type | Options (Default) | Description |
+| --- | --- | --- | --- |
+| clip | 8–16 bit integer, GRAY/YUV | | Clip to warp. |
+| data | clip | (required) | Global-motion data from `DepanEstimate`/`DepanAnalyse`. |
+| offset | float | (0.0) | Temporal offset/scale of the motion to apply; 0 = none, fractional values compensate by a fraction of the move. |
+| subpixel | int | 0–2 (2) | Subpixel interpolation: 0=none, 1=bilinear, 2=bicubic. |
+| pixaspect | float | (1.0) | Pixel aspect ratio. |
+| matchfields | bint | (True) | Match fields for interlaced content. |
+| mirror | int | 0–15 (0) | Fill exposed borders by mirroring (bitmask of edges: 1=top, 2=bottom, 4=left, 8=right). |
+| blur | int | (0) | Blur width applied to the mirrored border region. |
+| info | bint | (False) | Overlay diagnostic info on the frame. |
+| fields / tff | bint | (False) | Field-based handling and top-field-first. |
