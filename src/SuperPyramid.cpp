@@ -302,7 +302,7 @@ void PyramidPlane::ReducePlane(const PyramidPlane &src, int xRatioUV, int yRatio
 
 template <typename PixelType>
 static void VerticalBilinear(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RESTRICT pSrc8,
-    intptr_t nPitch, intptr_t nWidth, intptr_t nHeight, [[maybe_unused]] intptr_t bitsPerSample) noexcept {
+    ptrdiff_t nPitch, int nWidth, int nHeight, [[maybe_unused]] int bitsPerSample) noexcept {
     PixelType *pDst = (PixelType *)pDst8;
     PixelType *pSrc = (PixelType *)pSrc8;
 
@@ -322,7 +322,7 @@ static void VerticalBilinear(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RES
 
 template <typename PixelType>
 static void HorizontalBilinear(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RESTRICT pSrc8,
-    intptr_t nPitch, intptr_t nWidth, intptr_t nHeight, [[maybe_unused]] intptr_t bitsPerSample) noexcept {
+    ptrdiff_t nPitch, int nWidth, int nHeight, [[maybe_unused]] int bitsPerSample) noexcept {
     PixelType *pDst = (PixelType *)pDst8;
     PixelType *pSrc = (PixelType *)pSrc8;
 
@@ -341,7 +341,7 @@ static void HorizontalBilinear(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_R
 
 template <typename PixelType>
 static void DiagonalBilinear(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RESTRICT pSrc8,
-    intptr_t nPitch, intptr_t nWidth, intptr_t nHeight, [[maybe_unused]] intptr_t bitsPerSample) noexcept {
+    ptrdiff_t nPitch, int nWidth, int nHeight, [[maybe_unused]] int bitsPerSample) noexcept {
     PixelType *pDst = (PixelType *)pDst8;
     PixelType *pSrc = (PixelType *)pSrc8;
 
@@ -364,7 +364,7 @@ static void DiagonalBilinear(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RES
 // invarint simplified, 6 taps. Weights: (1, -5, 20, 20, -5, 1)/32
 template <typename PixelType>
 static void VerticalWiener(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RESTRICT pSrc8,
-    intptr_t nPitch, intptr_t nWidth, intptr_t nHeight, intptr_t bitsPerSample) noexcept {
+    ptrdiff_t nPitch, int nWidth, int nHeight, int bitsPerSample) noexcept {
     PixelType *pDst = (PixelType *)pDst8;
     PixelType *pSrc = (PixelType *)pSrc8;
 
@@ -418,7 +418,7 @@ static void VerticalWiener(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RESTR
 
 template <typename PixelType>
 static void HorizontalWiener(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RESTRICT pSrc8,
-    intptr_t nPitch, intptr_t nWidth, intptr_t nHeight, intptr_t bitsPerSample) noexcept {
+    ptrdiff_t nPitch, int nWidth, int nHeight, int bitsPerSample) noexcept {
     PixelType *pDst = (PixelType *)pDst8;
     PixelType *pSrc = (PixelType *)pSrc8;
 
@@ -464,7 +464,7 @@ static void HorizontalWiener(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RES
 // bicubic (Catmull-Rom 4 taps interpolation)
 template <typename PixelType>
 static void VerticalBicubic(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RESTRICT pSrc8,
-    intptr_t nPitch, intptr_t nWidth, intptr_t nHeight, intptr_t bitsPerSample) noexcept {
+    ptrdiff_t nPitch, int nWidth, int nHeight, int bitsPerSample) noexcept {
     PixelType *pDst = (PixelType *)pDst8;
     PixelType *pSrc = (PixelType *)pSrc8;
 
@@ -501,7 +501,7 @@ static void VerticalBicubic(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_REST
 
 template <typename PixelType>
 static void HorizontalBicubic(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RESTRICT pSrc8,
-    intptr_t nPitch, intptr_t nWidth, intptr_t nHeight, intptr_t bitsPerSample) noexcept {
+    ptrdiff_t nPitch, int nWidth, int nHeight, int bitsPerSample) noexcept {
     PixelType *pDst = (PixelType *)pDst8;
     PixelType *pSrc = (PixelType *)pSrc8;
 
@@ -545,7 +545,7 @@ static void Average2(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RESTRICT pS
 template<typename PixelType>
 void PyramidPlane::GeneratePelPlanes(int pel, SharpParam sharp, VSCore *core, const VSAPI *vsapi) noexcept {
     // FIXME, weird types and maybe shouldn't even be a function pointer
-    typedef void (*RefineFunction)(uint8_t *pDst, const uint8_t *pSrc, intptr_t nPitch, intptr_t nWidth, intptr_t nHeight, intptr_t bitsPerSample);
+    typedef void (*RefineFunction)(uint8_t *pDst, const uint8_t *pSrc, ptrdiff_t nPitch, int nWidth, int nHeight, int bitsPerSample);
 
     RefineFunction refine[3];
 
