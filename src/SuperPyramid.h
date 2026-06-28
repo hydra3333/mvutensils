@@ -128,16 +128,16 @@ private:
     void GeneratePelPlanes(int pel, SharpParam sharp, VSCore *core, const VSAPI *vsapi) noexcept;
 
     template<typename PixelType>
-    void SetExternalPelPlanes(const VSFrame *pelFrame, int pel, int plane, VSCore *core, const VSAPI *vsapi);
+    void SetExternalPelPlanes(const VSFrame *pelFrame, int plane, const VSAPI *vsapi);
 
     void FromExternalPlane(const VSFrame *planeFrame, int hPad, int vPad, int tailGuardLines, const VSAPI *vsapi) noexcept;
     void FromExternalPelPlanes(const VSFrame *pelFrame, int pel, int hPad, int vPad, const VSAPI *vsapi);
 
     template<typename PixelType>
-    void SetExtPel2(const VSFrame *pelFrame, int plane, VSCore *core, const VSAPI *vsapi);
+    void SetExtPel2(const VSFrame *pelFrame, int plane, const VSAPI *vsapi);
 
     template<typename PixelType>
-    void SetExtPel4(const VSFrame *pelFrame, int plane, VSCore *core, const VSAPI *vsapi);
+    void SetExtPel4(const VSFrame *pelFrame, int plane, const VSAPI *vsapi);
 
     template<typename PixelType>
     void PadPlaneData(int plane) noexcept;

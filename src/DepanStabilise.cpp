@@ -1036,7 +1036,7 @@ static const VSFrame *VS_CC depanStabiliseGetFrame1(int ndest, int activationRea
     return nullptr;
 }
 
-static void VS_CC depanStabiliseCreate(const VSMap *in, VSMap *out, void *userData, VSCore *core, const VSAPI *vsapi) noexcept {
+static void VS_CC depanStabiliseCreate(const VSMap *in, VSMap *out, [[maybe_unused]] void *userData, VSCore *core, const VSAPI *vsapi) noexcept {
     std::unique_ptr<DepanStabiliseData> d = std::make_unique<DepanStabiliseData>(vsapi);
 
     int err;

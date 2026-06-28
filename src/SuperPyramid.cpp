@@ -618,7 +618,7 @@ void PyramidPlane::GeneratePelPlanes(int pel, SharpParam sharp, VSCore *core, co
 
 
 template<typename PixelType>
-void PyramidPlane::SetExtPel2(const VSFrame *pelFrame, int plane, VSCore *core, const VSAPI *vsapi) {
+void PyramidPlane::SetExtPel2(const VSFrame *pelFrame, int plane, const VSAPI *vsapi) {
     const PixelType *pSrc2x = reinterpret_cast<const PixelType *>(vsapi->getReadPtr(pelFrame, plane));
     ptrdiff_t nSrc2xPitch = vsapi->getStride(pelFrame, plane);
 
@@ -652,7 +652,7 @@ void PyramidPlane::SetExtPel2(const VSFrame *pelFrame, int plane, VSCore *core, 
 
 
 template<typename PixelType>
-void PyramidPlane::SetExtPel4(const VSFrame *pelFrame, int plane, VSCore *core, const VSAPI *vsapi) {
+void PyramidPlane::SetExtPel4(const VSFrame *pelFrame, int plane, const VSAPI *vsapi) {
     const PixelType *pSrc2x = reinterpret_cast<const PixelType *>(vsapi->getReadPtr(pelFrame, plane));
     ptrdiff_t nSrc2xPitch = vsapi->getStride(pelFrame, plane);
 
@@ -697,11 +697,11 @@ void PyramidPlane::SetExtPel4(const VSFrame *pelFrame, int plane, VSCore *core, 
 
 
 template<typename PixelType>
-void PyramidPlane::SetExternalPelPlanes(const VSFrame *pelFrame, int pel, int plane, VSCore *core, const VSAPI *vsapi) {
+void PyramidPlane::SetExternalPelPlanes(const VSFrame *pelFrame, int plane, const VSAPI *vsapi) {
     if (nPel == 2) {
-        SetExtPel2<PixelType>(pelFrame, plane, core, vsapi);
+        SetExtPel2<PixelType>(pelFrame, plane, vsapi);
     } else if (nPel == 4) {
-        SetExtPel4<PixelType>(pelFrame, plane, core, vsapi);
+        SetExtPel4<PixelType>(pelFrame, plane, vsapi);
     }
 
     nVPaddingPel = nVPadding * nPel;
@@ -1085,13 +1085,13 @@ void FramePyramid::SetExternalPelPlanes(const VSFrame *pelFrame, VSCore *core, c
 
     if (bitsPerSample == 8) {
         for (int plane = 0; plane < (chroma ? 3 : 1); plane++)
-            pyramidLevels[0].planes[plane].SetExternalPelPlanes<uint8_t>(pelFrame, nPel, plane, core, vsapi);
+            pyramidLevels[0].planes[plane].SetExternalPelPlanes<uint8_t>(pelFrame, plane, vsapi);
     } else if (bitsPerSample == 32) {
         for (int plane = 0; plane < (chroma ? 3 : 1); plane++)
-            pyramidLevels[0].planes[plane].SetExternalPelPlanes<float>(pelFrame, nPel, plane, core, vsapi);
+            pyramidLevels[0].planes[plane].SetExternalPelPlanes<float>(pelFrame, plane, vsapi);
     } else {
         for (int plane = 0; plane < (chroma ? 3 : 1); plane++)
-            pyramidLevels[0].planes[plane].SetExternalPelPlanes<uint16_t>(pelFrame, nPel, plane, core, vsapi);
+            pyramidLevels[0].planes[plane].SetExternalPelPlanes<uint16_t>(pelFrame, plane, vsapi);
     }
 }
 

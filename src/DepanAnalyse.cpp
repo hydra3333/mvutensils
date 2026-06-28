@@ -304,7 +304,7 @@ static const VSFrame *VS_CC depanAnalyseGetFrame(int n, int activationReason, vo
     return nullptr;
 }
 
-static void VS_CC depanAnalyseCreate(const VSMap *in, VSMap *out, void *userData, VSCore *core, const VSAPI *vsapi) noexcept {
+static void VS_CC depanAnalyseCreate(const VSMap *in, VSMap *out, [[maybe_unused]] void *userData, VSCore *core, const VSAPI *vsapi) noexcept {
     std::unique_ptr<DepanAnalyseData> d = std::make_unique<DepanAnalyseData>(vsapi);
 
     try {
