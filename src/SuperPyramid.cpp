@@ -4,6 +4,7 @@
 #include <VSHelper4.h>
 #include <cassert>
 #include <memory>
+#include <type_traits>
 
 // Extra scanline(s) of slack allocated at the very end of the level-0 pel plane so the 32-bit SIMD
 // gathers (FlowInter / flowFetch) can over-read up to 3 bytes past the last pixel without leaving the
@@ -12,43 +13,38 @@
 // (FromExternalPlane / FromExternalPelPlanes). Only level 0 carries it (only level 0 is gathered).
 static constexpr int kLevel0GatherGuardLines = 1;
 
-void GetHVPairArgument(int &h, int &v, const char *name, int defaultH, int defaultV, const VSMap *in, const VSAPI *vsapi) {
+// Reads an "h" / "h,v" list argument. Only the per-element getter differs by T; an if-constexpr lambda
+// picks it (mapGetInt for int64_t, mapGetFloatSaturated for float, mapGetIntSaturated for int).
+template <typename T>
+void GetHVPairArgument(T &h, T &v, const char *name, TypeIdentity_t<T> defaultH, TypeIdentity_t<T> defaultV, const VSMap *in, const VSAPI *vsapi) {
+    static_assert(std::is_same_v<T, int> || std::is_same_v<T, int64_t> || std::is_same_v<T, float>,
+                  "GetHVPairArgument supports int, int64_t and float");
     int err;
     int numElems = vsapi->mapNumElements(in, name);
     if (numElems > 2)
         throw std::runtime_error(std::string("Too many values passed to ") + name);
 
-    h = vsapi->mapGetIntSaturated(in, name, 0, &err);
+    auto getElem = [&](int idx) -> T {
+        if constexpr (std::is_same_v<T, int64_t>)
+            return vsapi->mapGetInt(in, name, idx, &err);
+        else if constexpr (std::is_same_v<T, float>)
+            return vsapi->mapGetFloatSaturated(in, name, idx, &err);
+        else
+            return vsapi->mapGetIntSaturated(in, name, idx, &err);
+    };
+
+    h = getElem(0);
     if (err)
         h = defaultH;
 
-    v = vsapi->mapGetIntSaturated(in, name, 1, &err);
-    if (err) {
-        if (numElems == 1)
-            v = h;
-        else
-            v = defaultV;
-    }
-}
-
-void GetHVPairArgument(int64_t &h, int64_t &v, const char *name, int64_t defaultH, int64_t defaultV, const VSMap *in, const VSAPI *vsapi) {
-    int err;
-    int numElems = vsapi->mapNumElements(in, name);
-    if (numElems > 2)
-        throw std::runtime_error(std::string("Too many values passed to ") + name);
-
-    h = vsapi->mapGetInt(in, name, 0, &err);
+    v = getElem(1);
     if (err)
-        h = defaultH;
-
-    v = vsapi->mapGetInt(in, name, 1, &err);
-    if (err) {
-        if (numElems == 1)
-            v = h;
-        else
-            v = defaultV;
-    }
+        v = (numElems == 1) ? h : defaultV;
 }
+
+template void GetHVPairArgument<int>(int &, int &, const char *, int, int, const VSMap *, const VSAPI *);
+template void GetHVPairArgument<int64_t>(int64_t &, int64_t &, const char *, int64_t, int64_t, const VSMap *, const VSAPI *);
+template void GetHVPairArgument<float>(float &, float &, const char *, float, float, const VSMap *, const VSAPI *);
 
 void CheckBlkSize(int nBlkSizeX, int nBlkSizeY, int nOverlapX, int nOverlapY, int subSamplingW, int subSamplingH, bool useSatd) {
     if (useSatd && nBlkSizeX == 16 && nBlkSizeY == 2)

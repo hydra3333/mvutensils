@@ -199,7 +199,7 @@ static void Degrain_sse2(uint8_t * MVU_RESTRICT pDst, ptrdiff_t nDstPitch, const
 // The idiom used here is very friendly to compiler optimizers and helps them to not
 // widen the type used for calculations
 template <typename PixelType>
-static void LimitChanges_C(uint8_t * MVU_RESTRICT pDst8, ptrdiff_t nDstPitch, const uint8_t * MVU_RESTRICT pSrc8, ptrdiff_t nSrcPitch, int nWidth, int nHeight, int nLimit) noexcept {
+static void LimitChanges_C(uint8_t * MVU_RESTRICT pDst8, ptrdiff_t nDstPitch, const uint8_t * MVU_RESTRICT pSrc8, ptrdiff_t nSrcPitch, int nWidth, int nHeight, PixelType nLimit) noexcept {
     const PixelType lim = (PixelType)nLimit;
     if constexpr (std::is_integral_v<PixelType>) {
         const PixelType maxValue = (PixelType)~(PixelType)0; // 255 or 65535

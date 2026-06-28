@@ -21,7 +21,7 @@
 #include <string>
 #include <unordered_map>
 #include <memory>
-#include <climits>
+#include <cmath>
 
 #include <VapourSynth4.h>
 
@@ -42,6 +42,8 @@ struct DegrainData {
 
     int64_t thSAD[3];
     int nLimit[3];
+    float fLimit[3];
+    bool needsLimit[3];
     int64_t nSCD1;
     int nSCD2;
 
@@ -176,6 +178,8 @@ static const VSFrame *VS_CC degrainGetFrame(int n, int activationReason, void *i
             const int *nWidth_B = d->nWidth_B;
             const int64_t *thSAD = d->thSAD;
             const int *nLimit = d->nLimit;
+            const float *fLimit = d->fLimit;
+            const bool *needsLimit = d->needsLimit;
 
             OverlapWindows *OverWins[3] = { &d->OverWins[0], &d->OverWins[1], &d->OverWins[2] };
             std::unique_ptr<uint8_t, decltype(&mvu_aligned_free)> DstTempAlloc(nullptr, mvu_aligned_free);
@@ -315,13 +319,17 @@ static const VSFrame *VS_CC degrainGetFrame(int n, int activationReason, void *i
                     }
                 }
 
-                int pixelMax = PixelMaxValue<PixelType>(bitsPerSample); // 0 for float -> limit disabled (avoids 1<<32 UB)
-                if (nLimit[plane] < pixelMax)
-                    LimitChanges_C<PixelType>(pDst[plane], nDstPitches[plane],
-                        pSrc[plane], nSrcPitches[plane],
-                        vsapi->getFrameWidth(dst, plane), vsapi->getFrameHeight(dst, plane), nLimit[plane]);
+                if (needsLimit[plane]) {
+                    if constexpr (std::is_integral_v<PixelType>)
+                        LimitChanges_C<PixelType>(pDst[plane], nDstPitches[plane],
+                            pSrc[plane], nSrcPitches[plane],
+                            vsapi->getFrameWidth(dst, plane), vsapi->getFrameHeight(dst, plane), nLimit[plane]);
+                    else
+                        LimitChanges_C<PixelType>(pDst[plane], nDstPitches[plane],
+                            pSrc[plane], nSrcPitches[plane],
+                            vsapi->getFrameWidth(dst, plane), vsapi->getFrameHeight(dst, plane), fLimit[plane]);
+                }
             }
-
 
             return dst;
 
@@ -535,14 +543,22 @@ static void VS_CC degrainCreate(const VSMap *in, VSMap *out, [[maybe_unused]] vo
             throw std::runtime_error("with this block size and video format, thsad" + std::string(c ? "c" : "") + " must not exceed " + std::to_string(maximum) + " or some calculations would overflow");
         }
 
-        int pixelMax = (d->vi->format.bytesPerSample == 4) ? 0 : (1 << d->vi->format.bitsPerSample) - 1; // 0 for float (limit disabled; avoids 1<<32 UB)
+        GetHVPairArgument(d->fLimit[0], d->fLimit[1], "limit", std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(), in, vsapi);
+        d->fLimit[2] = d->fLimit[1];
+        for (int i = 0; i < 3; i++) {
+            d->needsLimit[i] = std::isfinite(d->fLimit[i]);
 
-        GetHVPairArgument(d->nLimit[0], d->nLimit[1], "limit", pixelMax, pixelMax, in, vsapi);
-
-        d->nLimit[2] = d->nLimit[1];
-
-        if (d->nLimit[0] < 0 || d->nLimit[0] > pixelMax || d->nLimit[1] < 0 || d->nLimit[1] > pixelMax)
-            throw std::runtime_error("limit must be between 0 and " + std::to_string(pixelMax));
+            if (d->needsLimit[i]) {
+                if (d->fLimit[i] <= 0.0f)
+                    throw std::runtime_error("limit must be non-negative");
+                if (d->vi->format.sampleType == stInteger) {
+                    int pixelMax = (1 << d->vi->format.bitsPerSample) - 1;
+                    d->nLimit[i] = static_cast<int>(d->fLimit[i] + 0.5f);
+                    if (d->nLimit[i] >= pixelMax)
+                        d->needsLimit[i] = false;
+                }
+            }
+        }
 
         // accumulator is 1x pixel width for float (bytesPerSample 4), 2x for 8/16-bit integer.
         d->dstTempPitch = ((vectors[0]->nWidth + 15) / 16) * 16 * d->vi->format.bytesPerSample * (d->vi->format.bytesPerSample == 4 ? 1 : 2);
@@ -635,7 +651,7 @@ constexpr const char *degrain_args =
     "vectors:vnode[];"
     "thsad:int[]:opt;"
     "planes:int[]:opt;"
-    "limit:int[]:opt;"
+    "limit:float[]:opt;"
     "thscd1:int:opt;"
     "thscd2:int:opt;"
     "prefix:data:opt;";

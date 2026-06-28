@@ -51,8 +51,7 @@ template <typename PixelType>
 static void ToPixels(uint8_t * MVU_RESTRICT pDst8, ptrdiff_t nDstPitch, const uint8_t * MVU_RESTRICT pSrc8, ptrdiff_t nSrcPitch, int nWidth, int nHeight, int bitsPerSample) {
     // float pixels accumulate in float (1x width); 8/16-bit accumulate in a 2x-width integer.
     using Acc = std::conditional_t<std::is_floating_point_v<PixelType>, float, std::conditional_t<sizeof(PixelType) == 1, uint16_t, uint32_t>>;
-    // clampMax is int to match ClampIntToRange's int maxVal (no float->int / sign conversion); value always fits.
-    const int clampMax = sizeof(PixelType) == 1 ? 0xFF : PixelMaxValue<Acc>(bitsPerSample);
+    const int clampMax = PixelMaxValue<PixelType>(bitsPerSample);
 
     for (int h = 0; h < nHeight; h++) {
         const Acc *pSrc = (const Acc *)pSrc8;
