@@ -177,9 +177,6 @@ static const VSFrame *VS_CC degrainGetFrame(int n, int activationReason, void *i
             const int *nBlkSizeY = d->nBlkSizeY;
             const int *nWidth_B = d->nWidth_B;
             const int64_t *thSAD = d->thSAD;
-            const int *nLimit = d->nLimit;
-            const float *fLimit = d->fLimit;
-            const bool *needsLimit = d->needsLimit;
 
             OverlapWindows *OverWins[3] = { &d->OverWins[0], &d->OverWins[1], &d->OverWins[2] };
             std::unique_ptr<uint8_t, decltype(&mvu_aligned_free)> DstTempAlloc(nullptr, mvu_aligned_free);
@@ -319,15 +316,15 @@ static const VSFrame *VS_CC degrainGetFrame(int n, int activationReason, void *i
                     }
                 }
 
-                if (needsLimit[plane]) {
+                if (d->needsLimit[plane]) {
                     if constexpr (std::is_integral_v<PixelType>)
                         LimitChanges_C<PixelType>(pDst[plane], nDstPitches[plane],
                             pSrc[plane], nSrcPitches[plane],
-                            vsapi->getFrameWidth(dst, plane), vsapi->getFrameHeight(dst, plane), nLimit[plane]);
+                            vsapi->getFrameWidth(dst, plane), vsapi->getFrameHeight(dst, plane), d->nLimit[plane]);
                     else
                         LimitChanges_C<PixelType>(pDst[plane], nDstPitches[plane],
                             pSrc[plane], nSrcPitches[plane],
-                            vsapi->getFrameWidth(dst, plane), vsapi->getFrameHeight(dst, plane), fLimit[plane]);
+                            vsapi->getFrameWidth(dst, plane), vsapi->getFrameHeight(dst, plane), d->fLimit[plane]);
                 }
             }
 
