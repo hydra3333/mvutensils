@@ -61,7 +61,7 @@ void PlaneResizer::Init(int dstwidth, int dstheight, int nBlkX, int nBlkY, int n
     mvuzimgxx::zimage_format srcFmt;
     srcFmt.width = nBlkX;
     srcFmt.height = nBlkY;
-    srcFmt.pixel_type = (bitsPerSample == 8) ? ZIMG_PIXEL_BYTE : ZIMG_PIXEL_WORD;
+    srcFmt.pixel_type = SelectOnBitsPerSample(bitsPerSample, ZIMG_PIXEL_BYTE, ZIMG_PIXEL_WORD, ZIMG_PIXEL_FLOAT);
     srcFmt.color_family = ZIMG_COLOR_GREY;
     srcFmt.pixel_range = ZIMG_RANGE_FULL;
     srcFmt.depth = bitsPerSample;
@@ -73,7 +73,7 @@ void PlaneResizer::Init(int dstwidth, int dstheight, int nBlkX, int nBlkY, int n
     mvuzimgxx::zimage_format dstFmt;
     dstFmt.width = dstwidth;
     dstFmt.height = dstheight;
-    dstFmt.pixel_type = (bitsPerSample == 8) ? ZIMG_PIXEL_BYTE : ZIMG_PIXEL_WORD;
+    dstFmt.pixel_type = SelectOnBitsPerSample(bitsPerSample, ZIMG_PIXEL_BYTE, ZIMG_PIXEL_WORD, ZIMG_PIXEL_FLOAT);
     dstFmt.color_family = ZIMG_COLOR_GREY;
     dstFmt.pixel_range = ZIMG_RANGE_FULL;
     dstFmt.depth = bitsPerSample;

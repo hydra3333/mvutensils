@@ -37,6 +37,7 @@ struct MaskData {
     intptr_t kind;
     int time256;
     int nSceneChangeValue;
+    float fSceneChangeValue;
     int64_t thscd1;
     int thscd2;
 
@@ -83,7 +84,11 @@ static const VSFrame *VS_CC maskGetFrame(int n, int activationReason, void *inst
                 d->maskResizerFull.Process(vsapi->getWritePtr(dst, 0), vsapi->getStride(dst, 0), Mask->mask, Mask->stride);
             } else {
                 PixelType *dstPtr = reinterpret_cast<PixelType *>(vsapi->getWritePtr(dst, 0));
-                std::fill(dstPtr, dstPtr + (vsapi->getStride(dst, 0) / sizeof(PixelType)) * vsapi->getFrameHeight(dst, 0), d->nSceneChangeValue);
+                size_t n = (vsapi->getStride(dst, 0) / sizeof(PixelType)) * vsapi->getFrameHeight(dst, 0);
+                if constexpr (std::is_floating_point_v<PixelType>)
+                    std::fill(dstPtr, dstPtr + n, static_cast<PixelType>(d->fSceneChangeValue)); // mask range [0,1]
+                else
+                    std::fill(dstPtr, dstPtr + n, static_cast<PixelType>(d->nSceneChangeValue));
             }
 
             vsapi->mapSetInt(vsapi->getFramePropertiesRW(dst), "_Range", VSC_RANGE_FULL, maAppend);
@@ -125,7 +130,7 @@ static void VS_CC maskCreate(const VSMap *in, VSMap *out, void *userData, VSCore
     if (err)
         time = 100.0;
 
-    d->nSceneChangeValue = vsapi->mapGetIntSaturated(in, "ysc", 0, &err);
+    d->fSceneChangeValue = vsapi->mapGetFloatSaturated(in, "scval", 0, &err);
 
     d->thscd1 = vsapi->mapGetInt(in, "thscd1", 0, &err);
     if (err)
@@ -158,11 +163,18 @@ static void VS_CC maskCreate(const VSMap *in, VSMap *out, void *userData, VSCore
         d->vi = *vsapi->getVideoInfo(d->node);
         d->vi.width = vectors.nRealWidth;
         d->vi.height = vectors.nRealHeight;
-        vsapi->queryVideoFormat(&d->vi.format, cfGray, stInteger, vectors.bitsPerSample, 0, 0, core);
+        VSSampleType sampleType = vectors.bitsPerSample == 32 ? stFloat : stInteger;
+        vsapi->queryVideoFormat(&d->vi.format, cfGray, sampleType, vectors.bitsPerSample, 0, 0, core);
 
-        int maxVal = (1 << vectors.bitsPerSample) - 1;
-        if (d->nSceneChangeValue < 0 || d->nSceneChangeValue > maxVal)
-            throw std::runtime_error("ysc must be between 0 and " + std::to_string(maxVal));
+        if (sampleType == stInteger) {
+            if (!std::isfinite(d->fSceneChangeValue))
+                throw std::runtime_error("scval must be a finite value for integer formats");
+
+            d->nSceneChangeValue = static_cast<int>(d->fSceneChangeValue + 0.5f); // round to nearest integer
+            int maxVal = (1 << std::min(16, vectors.bitsPerSample)) - 1;
+            if (d->nSceneChangeValue < 0 || d->nSceneChangeValue > maxVal)
+                throw std::runtime_error("scval must be between 0 and " + std::to_string(maxVal));
+        }
 
         vectors.ScaleThSCD(d->thscd1, d->thscd2, d->vi.format.bitsPerSample);
 
@@ -182,7 +194,7 @@ static void VS_CC maskCreate(const VSMap *in, VSMap *out, void *userData, VSCore
         {d->node, rpStrictSpatial}, 
     };
 
-    vsapi->createVideoFilter(out, d->filterName.c_str(), &d->vi, d->vi.format.bitsPerSample == 8 ? maskGetFrame<uint8_t> : maskGetFrame<uint16_t>, filterFree<MaskData>, fmParallel, deps, ARRAY_SIZE(deps), d.get(), core);
+    vsapi->createVideoFilter(out, d->filterName.c_str(), &d->vi, SelectOnBitsPerSample(d->vi.format.bitsPerSample, maskGetFrame<uint8_t>, maskGetFrame<uint16_t>, maskGetFrame<float>), filterFree<MaskData>, fmParallel, deps, ARRAY_SIZE(deps), d.get(), core);
     d.release();
 }
 
@@ -191,7 +203,7 @@ static constexpr char filterArgs[] =
     "ml:float:opt;"
     "gamma:float:opt;"
     "time:float:opt;"
-    "ysc:int:opt;"
+    "scval:float:opt;"
     "thscd1:int:opt;"
     "thscd2:int:opt;"
     "prefix:data:opt;";

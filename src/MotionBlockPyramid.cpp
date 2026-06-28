@@ -408,8 +408,8 @@ void MotionBlockLevel::Initialize(int _nBlkX, int _nBlkY, int _nBlkSizeX, int _n
 
     vectors.resize(nBlkCount);
 
-    // float SAD is mapped to the 16-bit scale, so cap the shift at 16 (also avoids 1<<32 UB for float).
-    verybigSAD = (int64_t)nBlkSizeX * nBlkSizeY * (1 << std::min(16, bitsPerSample));
+    // float SAD is mapped to the 16-bit scale
+    verybigSAD = (int64_t)nBlkSizeX * nBlkSizeY * (static_cast<int64_t>(1) << std::min(16, bitsPerSample));
 }
 
 MotionBlockLevel::~MotionBlockLevel() {
@@ -1786,7 +1786,7 @@ std::unique_ptr<BlockMask<PixelType>> MotionBlockPyramid::MakeVectorLengthMask(f
     float halfGamma = fGamma / 2;
     normFactor = normFactor * normFactor;
 
-    int maxVal = (1 << std::min(16, bitsPerSample)) - 1;
+    int maxVal = PixelMaxValue<PixelType>(bitsPerSample);
     MaskPitch /= sizeof(PixelType);
 
     for (int by = 0; by < nBlkY; by++) {
@@ -1818,7 +1818,7 @@ std::unique_ptr<BlockMask<PixelType>> MotionBlockPyramid::MakeSADMask(float dSAD
     int time4096X = (256 - time256) * 16 / (nBlkStepX * nPel);
     int time4096Y = (256 - time256) * 16 / (nBlkStepY * nPel);
 
-    int maxVal = (1 << std::min(16, bitsPerSample)) - 1;
+    int maxVal = PixelMaxValue<PixelType>(bitsPerSample);
     MaskPitch /= sizeof(PixelType);
 
     for (int by = 0; by < nBlkY; by++) {
@@ -1870,7 +1870,7 @@ std::unique_ptr<BlockMask<PixelType>> MotionBlockPyramid::MakeVectorOcclusionMas
     float occnormX = (80.0f  * dMaskNormDivider) / (nBlkStepX * nPel);
     float occnormY = (80.0f * dMaskNormDivider) / (nBlkStepY * nPel);
 
-    int maxVal = force8bitRange ? 255 : ((1 << std::min(16, bitsPerSample)) - 1);
+    int maxVal = force8bitRange ? 255 : PixelMaxValue<PixelType>(bitsPerSample);
     MaskPitch /= sizeof(PixelType);
 
     for (int by = 0; by < nBlkY; by++) {
@@ -1964,9 +1964,12 @@ SmallVectorMasks::~SmallVectorMasks() {
 
 template std::unique_ptr<BlockMask<uint8_t>> MotionBlockPyramid::MakeVectorLengthMask(float normFactor, float fGamma) const noexcept;
 template std::unique_ptr<BlockMask<uint16_t>> MotionBlockPyramid::MakeVectorLengthMask(float normFactor, float fGamma) const noexcept;
+template std::unique_ptr<BlockMask<float>> MotionBlockPyramid::MakeVectorLengthMask(float normFactor, float fGamma) const noexcept;
 
 template std::unique_ptr<BlockMask<uint8_t>> MotionBlockPyramid::MakeSADMask(float dSADNormFactor, float fGamma, int time256) const noexcept;
 template std::unique_ptr<BlockMask<uint16_t>> MotionBlockPyramid::MakeSADMask(float dSADNormFactor, float fGamma, int time256) const noexcept;
+template std::unique_ptr<BlockMask<float>> MotionBlockPyramid::MakeSADMask(float dSADNormFactor, float fGamma, int time256) const noexcept;
 
 template std::unique_ptr<BlockMask<uint8_t>> MotionBlockPyramid::MakeVectorOcclusionMask(float dMaskNormDivider, float fGamma, int time256, bool force8bitRange) const noexcept;
 template std::unique_ptr<BlockMask<uint16_t>> MotionBlockPyramid::MakeVectorOcclusionMask(float dMaskNormDivider, float fGamma, int time256, bool force8bitRange) const noexcept;
+template std::unique_ptr<BlockMask<float>> MotionBlockPyramid::MakeVectorOcclusionMask(float dMaskNormDivider, float fGamma, int time256, bool force8bitRange) const noexcept;

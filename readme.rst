@@ -93,9 +93,12 @@ Changes
     
     * Returns a grayscale full range mask only instead of the weird UV plane stuff going on in the original
     
-    * Supports 8-16 bit, the output format is derived entirely from the vector clip
+    * Added 9-16 bit support in addition to the float support, the output format is derived entirely from the vector clip, float masks are always clamped to 0..1 range
     
-    * The masks are actually generated at a higher bitdepth unlike avs+ where the same 8 bit mask is always upscaled
+    * The ysc argument was renamed to scval and is now float type, it's the exact value written to frames that are determined to be scene changes, note that for floating point you may supply any value (inf, nan, -0) which will break the 0..1 range guarantee, defaults to 0
+    
+    * The masks are generated at a higher bitdepth unlike avs+ forks where the same 8 bit mask is always upscaled
+    
 
 * Flow:
     * Improved internal mask resizing quality

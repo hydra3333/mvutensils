@@ -154,6 +154,15 @@ static constexpr int PixelMaxValue(int bitsPerSample) noexcept {
     if constexpr (std::is_integral_v<PixelType>)
         return (1 << bitsPerSample) - 1;
     else
-        return 0;
+        return 1;
 }
 
+template<typename T>
+static constexpr T SelectOnBitsPerSample(int bitsPerSample, T o8, T o16, T o32) noexcept {
+    if (bitsPerSample == 8)
+        return o8;
+    else if (bitsPerSample == 32)
+        return o32;
+    else
+        return o16;
+}
