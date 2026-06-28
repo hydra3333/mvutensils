@@ -99,7 +99,9 @@ static void VS_CC superCreate(const VSMap *in, VSMap *out, [[maybe_unused]] void
         if (err)
             d->nPel = 2;
 
-        d->nLevels = vsapi->mapGetIntSaturated(in, "levels", 0, &err);
+        d->nLevels = !!vsapi->mapGetIntSaturated(in, "alllevels", 0, &err) ? 0 : 1;
+        if (err)
+            d->nLevels = 0;
 
         d->sharp = static_cast<SharpParam>(vsapi->mapGetIntSaturated(in, "sharp", 0, &err));
         if (err)
@@ -183,7 +185,7 @@ void superRegister(VSPlugin *plugin, const VSPLUGINAPI *vspapi) noexcept {
                  "pad:int[]:opt;"
                  "blksize:int[];"
                  "overlap:int[];"
-                 "levels:int:opt;"
+                 "alllevels:int:opt;"
                  "sharp:int:opt;"
                  "rfilter:int:opt;"
                  "pel:int:opt;"

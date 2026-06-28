@@ -87,7 +87,7 @@ static const VSFrame *VS_CC recalculateGetFrame(int n, int activationReason, voi
             }
 
             VSFrame *dst = vsapi->copyFrame(src, core);
-            fgop.ExportFrameData(dst, true, d->prefix, vsapi);
+            fgop.ExportFrameData(dst, d->prefix, vsapi);
             return dst;
         } catch (const std::exception &e) {
             vsapi->setFilterError(("Recalculate: " + std::string(e.what())).c_str(), frameCtx);
