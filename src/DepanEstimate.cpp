@@ -612,7 +612,7 @@ static const VSFrame *VS_CC depanEstimateStage3GetFrame(int n, int activationRea
 }
 
 
-static void VS_CC depanEstimateCreate(const VSMap *in, VSMap *out, void *userData, VSCore *core, const VSAPI *vsapi) noexcept {
+static void VS_CC depanEstimateCreate(const VSMap *in, VSMap *out, [[maybe_unused]] void *userData, VSCore *core, const VSAPI *vsapi) noexcept {
     std::unique_ptr<DepanEstimateData> data1 = std::make_unique<DepanEstimateData>(vsapi);
 
     int err;

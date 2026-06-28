@@ -203,7 +203,7 @@ static const VSFrame *VS_CC depanCompensateGetFrame(int ndest, int activationRea
     return nullptr;
 }
 
-static void VS_CC depanCompensateCreate(const VSMap *in, VSMap *out, void *userData, VSCore *core, const VSAPI *vsapi) noexcept {
+static void VS_CC depanCompensateCreate(const VSMap *in, VSMap *out, [[maybe_unused]] void *userData, VSCore *core, const VSAPI *vsapi) noexcept {
     std::unique_ptr<DepanCompensateData> d = std::make_unique<DepanCompensateData>(vsapi);
 
     int err;

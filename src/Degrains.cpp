@@ -22,6 +22,8 @@
 #include <unordered_map>
 #include <memory>
 #include <cmath>
+#include <climits>
+#include <limits>
 
 #include <VapourSynth4.h>
 
