@@ -1432,7 +1432,7 @@ MotionBlockPyramid::MotionBlockPyramid(const FramePyramid &src, int nBlkSizeX, i
     state = State::ReadyForSearch;
 }
 
-void MotionBlockPyramid::LoadFrameData(const VSFrame *srcFrame, int maxLevel, const std::string &prefix, const VSAPI *vsapi) {
+void MotionBlockPyramid::LoadFrameData(const VSFrame *srcFrame, bool loadVectors, const std::string &prefix, const VSAPI *vsapi) {
     sourceFrame = srcFrame;
 
     if (!srcFrame)
@@ -1472,38 +1472,35 @@ void MotionBlockPyramid::LoadFrameData(const VSFrame *srcFrame, int maxLevel, co
         || bitsPerSample < 8 || (bitsPerSample > 16 && bitsPerSample != 32))
         return;
 
-    std::string vectorsProp = prefix + "AnalysisVectors";
+    if (loadVectors) {
+        std::string vectorsProp = prefix + "AnalysisVectors";
+        std::string sadProp = prefix + "AnalysisSAD";
 
-    int nWidth_B = (nBlkSizeX - nOverlapX) * nBlkX + nOverlapX;
-    int nHeight_B = (nBlkSizeY - nOverlapY) * nBlkY + nOverlapY;
+        pyramidLevels.resize(1);
+        pyramidLevels[0].Initialize(nBlkX, nBlkY, nBlkSizeX, nBlkSizeY, nPel, 0, true, chroma, nOverlapX, nOverlapY, xRatioUV, yRatioUV, bitsPerSample);
 
-    int loadLevels = (maxLevel < 0) ? nLevelCount : std::min(maxLevel, nLevelCount);
+        int vectSize = vsapi->mapNumElements(props, vectorsProp.c_str());
+        int sadSize = vsapi->mapNumElements(props, sadProp.c_str());
 
-    if (loadLevels > 0) {
-        pyramidLevels.resize(loadLevels);
-
-        for (int i = 0; i < loadLevels; i++) {
-            int nBlkX1 = ((nWidth_B >> i) - nOverlapX) / (nBlkSizeX - nOverlapX);
-            int nBlkY1 = ((nHeight_B >> i) - nOverlapY) / (nBlkSizeY - nOverlapY);
-            int size = vsapi->mapGetDataSize(props, vectorsProp.c_str(), i, &err);
-            pyramidLevels[i].Initialize(nBlkX1, nBlkY1, nBlkSizeX, nBlkSizeY, (i == 0) ? nPel : 1, i, (i == loadLevels - 1), chroma, nOverlapX, nOverlapY, xRatioUV, yRatioUV, vi->bitsPerSample);
-            if (size == nBlkX1 * nBlkY1 * static_cast<int>(sizeof(VECTOR))) {
-                const char *data = vsapi->mapGetData(props, vectorsProp.c_str(), i, &err);
-                if (!data) {
-                    pyramidLevels.clear();
-                    state = State::MetadataOnly;
-                    break;
-                }
-                pyramidLevels[i].vectors.resize(nBlkX1 * nBlkY1);
-                std::memcpy(pyramidLevels[i].vectors.data(), data, size);
-            } else {
-                // shouldn't happen
-                assert(size == -1);
-                pyramidLevels.clear();
-                state = State::MetadataOnly;
-                break;
-            }
+        if (vectSize != sadSize || vectSize != nBlkX * nBlkY) {
+            state = State::MetadataOnly;
+            return;
         }
+
+        const int64_t *vectData = vsapi->mapGetIntArray(props, vectorsProp.c_str(), nullptr);
+        const int64_t *sadData = vsapi->mapGetIntArray(props, sadProp.c_str(), nullptr);
+
+        auto &dest = pyramidLevels[0].vectors;
+        dest.resize(nBlkX * nBlkY);
+        for (int i = 0; i < vectSize; ++i) {
+            auto &destBlock = dest[i];
+            destBlock.x = static_cast<int>(vectData[i] & 0xFFFFFFFF);
+            destBlock.y = static_cast<int>((vectData[i] >> 32) & 0xFFFFFFFF);
+            destBlock.sad = sadData[i];
+        }
+
+        // Reject corrupt/hostile vector data before any consumer dereferences it for motion compensation.
+        ValidateVectors();
 
         if (state != State::MetadataOnly)
             state = State::ReadyForRecalculate;
@@ -1512,9 +1509,51 @@ void MotionBlockPyramid::LoadFrameData(const VSFrame *srcFrame, int maxLevel, co
     }
 }
 
-MotionBlockPyramid::MotionBlockPyramid(const VSFrame *src, int maxLevel, const std::string &prefix, const VSAPI *vsapi) noexcept :
+void MotionBlockPyramid::ValidateVectors() const {
+    if (pyramidLevels.empty())
+        return;
+
+    const auto &vectors = pyramidLevels[0].vectors;
+
+    // The grid must describe exactly one vector per block; otherwise the metadata and the vector array disagree
+    // and we cannot derive safe per-block bounds. (LoadFrameData already enforces this, checked again defensively.)
+    if (static_cast<int64_t>(vectors.size()) != static_cast<int64_t>(nBlkX) * nBlkY)
+        throw MotionBlockPyramidError("Motion vector count does not match the block grid");
+
+    // Bounds computed in int64 to stay safe even for hostile metadata. The safe vector range is exactly the one
+    // DoSearchMVs (at level 0) and DoRecalculateMVs enforce, so any vector produced by Analyse/Recalculate passes;
+    // only corrupt or hand-crafted data that would read outside the padded reference plane is rejected.
+    const int64_t nLogPel = ilog2(nPel);
+    const int64_t nPaddedWidth = static_cast<int64_t>(nWidth) + 2 * nHPadding;
+    const int64_t nPaddedHeight = static_cast<int64_t>(nHeight) + 2 * nVPadding;
+    const int64_t stepX = nBlkSizeX - nOverlapX;
+    const int64_t stepY = nBlkSizeY - nOverlapY;
+
+    for (int blky = 0; blky < nBlkY; ++blky) {
+        // Block top-left in the padded plane (matches MotionBlockLevel x[0]/y[0]).
+        const int64_t y0 = static_cast<int64_t>(nVPadding) + stepY * blky;
+        const int64_t nDyMin = -(y0 << nLogPel);
+        const int64_t nDyMax = (nPaddedHeight - y0 - nBlkSizeY) << nLogPel;
+
+        for (int blkx = 0; blkx < nBlkX; ++blkx) {
+            const int64_t x0 = static_cast<int64_t>(nHPadding) + stepX * blkx;
+            const int64_t nDxMin = -(x0 << nLogPel);
+            const int64_t nDxMax = (nPaddedWidth - x0 - nBlkSizeX) << nLogPel;
+
+            const VECTOR &v = vectors[static_cast<size_t>(blky) * nBlkX + blkx];
+
+            if (v.sad < 0)
+                throw MotionBlockPyramidError("Motion vector data contains a negative SAD value");
+
+            if (v.x < nDxMin || v.x >= nDxMax || v.y < nDyMin || v.y >= nDyMax)
+                throw MotionBlockPyramidError("Motion vector out of bounds; it would cause an out-of-bounds reference read");
+        }
+    }
+}
+
+MotionBlockPyramid::MotionBlockPyramid(const VSFrame *src, bool loadVectors, const std::string &prefix, const VSAPI *vsapi) :
     vsapi(vsapi) {
-    LoadFrameData(src, maxLevel, prefix, vsapi);
+    LoadFrameData(src, loadVectors, prefix, vsapi);
 }
 
 MotionBlockPyramid::MotionBlockPyramid(VSNode *node, const std::string &prefix, const VSAPI *vsapi) :
@@ -1523,7 +1562,7 @@ MotionBlockPyramid::MotionBlockPyramid(VSNode *node, const std::string &prefix, 
     const VSFrame *srcFrame = vsapi->getFrame(0, node, errorMsg, ERROR_SIZE);
     if (!srcFrame)
         throw std::runtime_error("Failed to retrieve first frame from super clip. Error message: " + std::string(errorMsg));
-    LoadFrameData(srcFrame, 0, prefix, vsapi);
+    LoadFrameData(srcFrame, false, prefix, vsapi);
 }
 
 MotionBlockPyramid::~MotionBlockPyramid() {
@@ -1659,20 +1698,19 @@ void MotionBlockPyramid::ExportFrameData(VSFrame *dst, bool oneLevel, const std:
 
     if (HasMotionVectors()) {
         std::string vectorsProp = prefix + "AnalysisVectors";
+        std::vector<int64_t> tmp;
+        tmp.resize(pyramidLevels[0].vectors.size());
+        const auto &source = pyramidLevels[0].vectors;
+        for (size_t i = 0; i < source.size(); i++)
+            tmp[i] = (static_cast<int64_t>(source[i].x) & 0xFFFFFFFF) | ((static_cast<int64_t>(source[i].y) & 0xFFFFFFFF) << 32);
 
-        for (int i = 0; i < nLevelCount; i++) {
-            const auto &plane = pyramidLevels[i];
-            vsapi->mapSetData(props,
-                vectorsProp.c_str(),
-                (const char *)plane.vectors.data(),
-                static_cast<int>(plane.vectors.size() * sizeof(VECTOR)),
-                dtBinary,
-                maAppend);
-            if (oneLevel)
-                return;
-        };
+        vsapi->mapSetIntArray(props, (prefix + "AnalysisVectors").c_str(), tmp.data(), static_cast<int>(tmp.size()));
+
+        for (size_t i = 0; i < source.size(); i++)
+            tmp[i] = source[i].sad;
+
+        vsapi->mapSetIntArray(props, (prefix + "AnalysisSAD").c_str(), tmp.data(), static_cast<int>(tmp.size()));
     }
-
 }
 
 bool MotionBlockPyramid::IsUsable(int64_t thscd1, int thscd2) const noexcept {

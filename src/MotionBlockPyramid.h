@@ -267,7 +267,8 @@ private:
     std::vector<MotionBlockLevel> pyramidLevels;
     const VSFrame *sourceFrame = nullptr;
     const VSAPI *vsapi = nullptr;
-    void LoadFrameData(const VSFrame *srcFrame, int maxLevel, const std::string &prefix, const VSAPI *vsapi);
+    void LoadFrameData(const VSFrame *srcFrame, bool loadVectors, const std::string &prefix, const VSAPI *vsapi);
+    void ValidateVectors() const;
 public:
     // The FramePyramid in src is only used as a template for the internal data structures, the actual motion estimation is performed on the frames passed to SearchMVs
     MotionBlockPyramid(const FramePyramid &src, int nBlkSizeX, int nBlkSizeY, int nOverlapX, int nOverlapY, int nLevels, bool chroma, int deltaFrame);
@@ -275,7 +276,7 @@ public:
     // de-serialization from a frame, can choose to omit some levels by setting maxLevel, if -1 all levels are loaded, 0 means only metadata and no vectors are loaded,
     // positive numbers mean that many levels are loaded. When loading from clips passing 1 is usually enough.
     // Object can be in an invalid or limited state after this constructor
-    MotionBlockPyramid(const VSFrame *src, int maxLevel, const std::string &prefix, const VSAPI *vsapi) noexcept;
+    MotionBlockPyramid(const VSFrame *src, bool loadVectors, const std::string &prefix, const VSAPI *vsapi);
 
     // Constructor to load metadata and do nothing else
     MotionBlockPyramid(VSNode *node, const std::string &prefix, const VSAPI *vsapi);

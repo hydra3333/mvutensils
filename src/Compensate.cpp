@@ -92,40 +92,41 @@ static const VSFrame *VS_CC compensateGetFrame(int n, int activationReason, void
         uint8_t *pDstCur[3] = {};
         ptrdiff_t nDstPitches[3] = {};
 
-        MotionBlockPyramid vectors(vsapi->getFrameFilter(n, d->vectors, frameCtx), 1, d->prefix, vsapi);
-
-        const int xRatioUV = vectors.xRatioUV;
-        const int yRatioUV = vectors.yRatioUV;
-        const int ySubUV = (yRatioUV == 2) ? 1 : 0;
-        const int xSubUV = (xRatioUV == 2) ? 1 : 0;
-        const int nWidth[3] = { vectors.nWidth, nWidth[0] >> xSubUV, nWidth[1] };
-        const int nHeight[3] = { vectors.nHeight, nHeight[0] >> ySubUV, nHeight[1] };
-        const int nOverlapX[3] = { vectors.nOverlapX, nOverlapX[0] >> xSubUV, nOverlapX[1] };
-        const int nOverlapY[3] = { vectors.nOverlapY, nOverlapY[0] >> ySubUV, nOverlapY[1] };
-        const int nBlkSizeX[3] = { vectors.nBlkSizeX, nBlkSizeX[0] >> xSubUV, nBlkSizeX[1] };
-        const int nBlkSizeY[3] = { vectors.nBlkSizeY, nBlkSizeY[0] >> ySubUV, nBlkSizeY[1] };
-        const int nBlkX = vectors.nBlkX;
-        const int nBlkY = vectors.nBlkY;
-        const int64_t thSAD = d->thSAD;
-        const int dstTempPitch[3] = { d->dstTempPitch, d->dstTempPitchUV, d->dstTempPitchUV };
-        const bool chroma = d->chroma;
-        const int nPel = vectors.nPel;
-        const int nHPadding[3] = { vectors.nHPadding, nHPadding[0] >> xSubUV, nHPadding[1] };
-        const int nVPadding[3] = { vectors.nVPadding, nVPadding[0] >> ySubUV, nVPadding[1] };
-        const int fields = d->fields;
-        const int time256 = d->time256;
-
-        int bitsPerSample = d->supervi->format.bitsPerSample;
-
-        int nWidth_B[3] = { nBlkX * (nBlkSizeX[0] - nOverlapX[0]) + nOverlapX[0], nWidth_B[0] >> xSubUV, nWidth_B[1] };
-        int nHeight_B[3] = { nBlkY * (nBlkSizeY[0] - nOverlapY[0]) + nOverlapY[0], nHeight_B[0] >> ySubUV, nHeight_B[1] };
-
-
-        int num_planes = chroma ? 3 : 1;
-
         VSFrame *dst = nullptr;
 
         try {
+            // Construct (and validate) the vectors inside the try: deserialization can throw on corrupt data.
+            MotionBlockPyramid vectors(vsapi->getFrameFilter(n, d->vectors, frameCtx), 1, d->prefix, vsapi);
+
+            const int xRatioUV = vectors.xRatioUV;
+            const int yRatioUV = vectors.yRatioUV;
+            const int ySubUV = (yRatioUV == 2) ? 1 : 0;
+            const int xSubUV = (xRatioUV == 2) ? 1 : 0;
+            const int nWidth[3] = { vectors.nWidth, nWidth[0] >> xSubUV, nWidth[1] };
+            const int nHeight[3] = { vectors.nHeight, nHeight[0] >> ySubUV, nHeight[1] };
+            const int nOverlapX[3] = { vectors.nOverlapX, nOverlapX[0] >> xSubUV, nOverlapX[1] };
+            const int nOverlapY[3] = { vectors.nOverlapY, nOverlapY[0] >> ySubUV, nOverlapY[1] };
+            const int nBlkSizeX[3] = { vectors.nBlkSizeX, nBlkSizeX[0] >> xSubUV, nBlkSizeX[1] };
+            const int nBlkSizeY[3] = { vectors.nBlkSizeY, nBlkSizeY[0] >> ySubUV, nBlkSizeY[1] };
+            const int nBlkX = vectors.nBlkX;
+            const int nBlkY = vectors.nBlkY;
+            const int64_t thSAD = d->thSAD;
+            const int dstTempPitch[3] = { d->dstTempPitch, d->dstTempPitchUV, d->dstTempPitchUV };
+            const bool chroma = d->chroma;
+            const int nPel = vectors.nPel;
+            const int nHPadding[3] = { vectors.nHPadding, nHPadding[0] >> xSubUV, nHPadding[1] };
+            const int nVPadding[3] = { vectors.nVPadding, nVPadding[0] >> ySubUV, nVPadding[1] };
+            const int fields = d->fields;
+            const int time256 = d->time256;
+
+            int bitsPerSample = d->supervi->format.bitsPerSample;
+
+            int nWidth_B[3] = { nBlkX * (nBlkSizeX[0] - nOverlapX[0]) + nOverlapX[0], nWidth_B[0] >> xSubUV, nWidth_B[1] };
+            int nHeight_B[3] = { nBlkY * (nBlkSizeY[0] - nOverlapY[0]) + nOverlapY[0], nHeight_B[0] >> ySubUV, nHeight_B[1] };
+
+
+            int num_planes = chroma ? 3 : 1;
+
             const VSFrame *src = vsapi->getFrameFilter(n, d->super, frameCtx);
             FramePyramid pSrcGOF(src, 1, d->prefix, vsapi);
             const auto &pSrcPlanes = pSrcGOF.GetLevel(0).planes;

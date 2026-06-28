@@ -46,6 +46,8 @@ Changes
     * Greatly reduced memory usage
 
 * Analyse/Recalculate:    
+    * Motion vectors are now exported in MVUAnalysisVectors where the upper 32 bits contain y and the lower 32 bits contain x, the corresponding block sad values are exported in MVUAnalysisSAD
+
     * Now takes blksize=[h, v] and overlap=[h, v] like Super. These values also default to the ones used when creating the super clip.
 
     * The dct argument was replaced with satd (true/false), satd=false is equivalent to dct=0 and satd=true is the same as dct=5 in the original mvtools
