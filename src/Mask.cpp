@@ -84,11 +84,11 @@ static const VSFrame *VS_CC maskGetFrame(int n, int activationReason, void *inst
                 d->maskResizerFull.Process(vsapi->getWritePtr(dst, 0), vsapi->getStride(dst, 0), Mask->mask, Mask->stride);
             } else {
                 PixelType *dstPtr = reinterpret_cast<PixelType *>(vsapi->getWritePtr(dst, 0));
-                size_t n = (vsapi->getStride(dst, 0) / sizeof(PixelType)) * vsapi->getFrameHeight(dst, 0);
+                size_t off = (vsapi->getStride(dst, 0) / sizeof(PixelType)) * vsapi->getFrameHeight(dst, 0);
                 if constexpr (std::is_floating_point_v<PixelType>)
-                    std::fill(dstPtr, dstPtr + n, static_cast<PixelType>(d->fSceneChangeValue)); // mask range [0,1]
+                    std::fill(dstPtr, dstPtr + off, static_cast<PixelType>(d->fSceneChangeValue)); // mask range [0,1]
                 else
-                    std::fill(dstPtr, dstPtr + n, static_cast<PixelType>(d->nSceneChangeValue));
+                    std::fill(dstPtr, dstPtr + off, static_cast<PixelType>(d->nSceneChangeValue));
             }
 
             vsapi->mapSetInt(vsapi->getFramePropertiesRW(dst), "_Range", VSC_RANGE_FULL, maAppend);

@@ -283,7 +283,7 @@ public:
 
     ~MotionBlockPyramid();
 
-    void ExportFrameData(VSFrame *dst, bool oneLevel, const std::string &prefix, const VSAPI *vsapi) const noexcept; // serialization to a frame, oneLevel means that only the finest level is exported, otherwise all levels are exported as separate properties
+    void ExportFrameData(VSFrame *dst, const std::string &prefix, const VSAPI *vsapi) const noexcept; // serialization to a frame, oneLevel means that only the finest level is exported, otherwise all levels are exported as separate properties
 
     void SearchMVs(const FramePyramid &pSrcGOF, const FramePyramid &pRefGOF,
         SearchType searchType, int nSearchParam, int nPelSearch, int nLambda,

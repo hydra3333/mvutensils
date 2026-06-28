@@ -77,7 +77,7 @@ static void Degrain_C16(uint8_t * MVU_RESTRICT pDst8, ptrdiff_t nDstPitch, const
                 sum += pRef[x] * wref[r];
             }
 
-            pDst[x] = sum >> 8;
+            pDst[x] = static_cast<uint16_t>(sum >> 8);
         }
 
         pDst8 += nDstPitch;

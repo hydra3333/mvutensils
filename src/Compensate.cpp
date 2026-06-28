@@ -38,7 +38,7 @@ struct CompensateData {
     const VSVideoInfo *supervi = nullptr;
 
     int64_t thSAD;
-    int fields;
+    bool fields;
     int time256;
     int64_t nSCD1;
     int nSCD2;
@@ -114,9 +114,6 @@ static const VSFrame *VS_CC compensateGetFrame(int n, int activationReason, void
             const int dstTempPitch[3] = { d->dstTempPitch, d->dstTempPitchUV, d->dstTempPitchUV };
             const bool chroma = d->chroma;
             const int nPel = vectors.nPel;
-            const int nHPadding[3] = { vectors.nHPadding, nHPadding[0] >> xSubUV, nHPadding[1] };
-            const int nVPadding[3] = { vectors.nVPadding, nVPadding[0] >> ySubUV, nVPadding[1] };
-            const int fields = d->fields;
             const int time256 = d->time256;
 
             int bitsPerSample = d->supervi->format.bitsPerSample;
@@ -146,7 +143,7 @@ static const VSFrame *VS_CC compensateGetFrame(int n, int activationReason, void
                 }
 
                 int fieldShift = 0;
-                if (fields && nPel > 1 && ((nref - n) % 2 != 0)) {
+                if (d->fields && nPel > 1 && ((nref - n) % 2 != 0)) {
                     bool src_top_field = GetTopField(src, n, d->tff_exists, d->tff, true, vsapi);
                     bool ref_top_field = GetTopField(ref, nref, d->tff_exists, d->tff, true, vsapi);
                     fieldShift = ComputeFieldShift(src_top_field, ref_top_field, nPel);

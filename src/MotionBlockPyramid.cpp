@@ -1438,7 +1438,6 @@ void MotionBlockPyramid::LoadFrameData(const VSFrame *srcFrame, bool loadVectors
     if (!srcFrame)
         return;
 
-    const VSVideoFormat *vi = vsapi->getVideoFrameFormat(srcFrame);
     auto props = vsapi->getFramePropertiesRO(srcFrame);
     int err;
     nWidth = vsapi->mapGetIntSaturated(props, (prefix + "AnalysisWidth").c_str(), 0, &err);
@@ -1668,7 +1667,7 @@ void MotionBlockPyramid::RecalculateMVs(const FramePyramid &pSrcGOF, const Frame
     state = State::AnalysisDone;
 }
 
-void MotionBlockPyramid::ExportFrameData(VSFrame *dst, bool oneLevel, const std::string &prefix, const VSAPI *vsapi) const noexcept {
+void MotionBlockPyramid::ExportFrameData(VSFrame *dst, const std::string &prefix, const VSAPI *vsapi) const noexcept {
     auto props = vsapi->getFramePropertiesRW(dst);
 
     vsapi->mapSetInt(props, (prefix + "AnalysisWidth").c_str(), nWidth, maReplace);
