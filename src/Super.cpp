@@ -99,7 +99,7 @@ static void VS_CC superCreate(const VSMap *in, VSMap *out, [[maybe_unused]] void
         if (err)
             d->nPel = 2;
 
-        d->nLevels = !!vsapi->mapGetIntSaturated(in, "alllevels", 0, &err) ? 0 : 1;
+        d->nLevels = !!vsapi->mapGetIntSaturated(in, "onelevel", 0, &err) ? 1 : 0;
         if (err)
             d->nLevels = 0;
 
@@ -182,10 +182,10 @@ static void VS_CC superCreate(const VSMap *in, VSMap *out, [[maybe_unused]] void
 void superRegister(VSPlugin *plugin, const VSPLUGINAPI *vspapi) noexcept {
     vspapi->registerFunction("Super", 
                  "clip:vnode;"
-                 "pad:int[]:opt;"
                  "blksize:int[];"
                  "overlap:int[];"
-                 "alllevels:int:opt;"
+                 "pad:int[]:opt;"
+                 "onelevel:int:opt;"
                  "sharp:int:opt;"
                  "rfilter:int:opt;"
                  "pel:int:opt;"

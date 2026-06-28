@@ -1,4 +1,4 @@
-# MVUtensils - a faster, cleaner motion-estimation toolkit for VapourSynth
+# MVUtensils
 
 MVUtensils (namespace `mvu`) is a large refactoring and cleanup of the original
 VapourSynth [mvtools](https://github.com/dubhater/vapoursynth-mvtools) port. It keeps the same
@@ -26,14 +26,14 @@ and adds full high-bit-depth and float support.
 
 ## Porting from MVTools
 
-MVUtensils is API-compatible in spirit but not verbatim. The headline differences:
+MVUtensils is API-compatible in spirit but not verbatim. The main differences:
 
 | MVTools | MVUtensils |
 | --- | --- |
 | namespace `mv` | namespace `mvu` |
 | `Super(clip, pel=2)` (blksize implicit) | `Super(clip, blksize=8, overlap=4, pel=2)` — **blksize and overlap are mandatory** |
 | `hpad` / `vpad` | `pad=[h, v]` |
-| `levels` | `alllevels=True/False` |
+| `levels` | `onelevel=True/False` |
 | `blksize`/`blksizev`, `overlap`/`overlapv` | `blksize=[h, v]`, `overlap=[h, v]` (a single value applies to both axes) |
 | `Analyse(isb=False, delta=1)` (forward) | `Analyse(delta=-1)` — **negative delta = forward, positive = backward** |
 | `dct=0` / `dct=5` | `satd=False` / `satd=True` |
@@ -42,7 +42,7 @@ MVUtensils is API-compatible in spirit but not verbatim. The headline difference
 | `lambda`, `global` | `mvlambda`, `globalmv` (avoid Python keywords) |
 | `Degrain1(clip, super, mvbw, mvfw, ...)` | `Degrain(clip, super, [mvbw, mvfw], ...)` — vectors in a list |
 | `thsad` + `thsadc` | `thsad=[luma, chroma]` |
-| `limit` + `limitc` (int) | `limit=[luma, chroma]` (float; non-finite or > max = no limit) |
+| `limit` + `limitc` | `limit=[luma, chroma]` (float; non-finite or > max = no limit) |
 | `Flow(mode=...)`, `BlockFPS`, `Finest`, `search_coarse`, `divide`, `scbehavior` | removed |
 | `FlowFPS(mask=1/2)` | `FlowFPS(extramask=False/True)` |
 | `Mask(kind=0/1/2)` | `VectorLengthMask` / `SADMask` / `OcclusionMask` |
@@ -87,7 +87,7 @@ out  = core.mvu.Degrain(clip, super, [mvbw, mvfw])  # vectors passed as a list
 
 ## Quick start
 
-The vector estimators (`Analyse`, `AnalyseMany`, `Recalculate`) consume a *super* clip and emit a
+The motion vector estimators (`Analyse`, `AnalyseMany`, `Recalculate`) consume a *super* clip and emit a
 *vector* clip; the consumers (`Degrain`, `Compensate`, `Flow*`, masks) take the super and the
 vector clip(s). `AnalyseMany` is the easy way to produce the list of forward/backward vectors that
 `Degrain`, `FlowInter`, `FlowFPS` and `FlowBlur` expect.
@@ -102,9 +102,9 @@ super = core.mvu.Super(clip, blksize=8, overlap=4)
 out = core.mvu.FlowFPS(clip, super, core.mvu.AnalyseMany(super), num=clip.fps_num*2, den=clip.fps_den)
 ```
 
-Only `Analyse` uses the full hierarchical pyramid (`Super(..., alllevels=True)`, the default). For
+Only `Analyse` uses the full hierarchical pyramid (`Super(..., onelevel=False)`, the default). For
 `Recalculate` and every consumer filter a single level is enough, so build their super with
-`alllevels=False` to save time and memory.
+`onelevel=True` to save time and memory if it's not also used with `Analyse`.
 
 ## Common parameters
 
@@ -125,7 +125,7 @@ Prepares a clip for motion estimation: it pads the frame, optionally generates s
 (`pel`) planes, and builds the hierarchical pyramid used by `Analyse`.
 
 ```py
-core.mvu.Super(clip clip, int[] blksize, int[] overlap[, int[] pad=[16, 16], int pel=2, int sharp=2, int rfilter=1, bint alllevels=True, clip pelclip=None, str prefix="MVUtensils"])
+core.mvu.Super(clip clip, int[] blksize, int[] overlap[, int[] pad=[16, 16], int pel=2, int sharp=2, int rfilter=1, bint onelevel=False, clip pelclip=None, str prefix="MVUtensils"])
 ```
 
 | Parameter | Type | Options (Default) | Description |
@@ -137,24 +137,24 @@ core.mvu.Super(clip clip, int[] blksize, int[] overlap[, int[] pad=[16, 16], int
 | pel | int | 1, 2, 4 (2) | Sub-pixel accuracy: 1 = full-pixel, 2 = half-pixel, 4 = quarter-pixel. Higher needs more memory and time. |
 | sharp | int | 0–2 (2) | Sub-pixel interpolation for `pel` > 1: 0 = bilinear, 1 = bicubic, 2 = Wiener (sharpest). |
 | rfilter | int | 0–2 (1) | Pyramid downscale filter: 0 = simple average, 1 = bilinear, 2 = cubic. |
-| alllevels | bint | (True) | Generate every hierarchical level. Only `Analyse` uses levels above 0; for everything else pass `False` to save memory. |
+| onelevel | bint | (False) | Generate every hierarchical level. Only `Analyse` uses more than one level, if the super clip is only passed to other functions set it to `True` to save memory and a small speedup. |
 | pelclip | clip | (None) | Optional externally-supplied sub-pixel clip instead of generating one internally. |
 
 > **Porting:** `blksize`/`overlap` were optional in mvtools and are now **mandatory** because the
 > super clip pads itself to make edge blocks valid. `hpad`/`vpad` became `pad=[h, v]`, and `levels`
-> became the boolean `alllevels`.
+> became the boolean `onelevel`.
 
 ## Analyse
 
 Estimates a field of motion vectors for one temporal direction/distance.
 
 ```py
-core.mvu.Analyse(clip super[, int[] blksize=<from super>, int[] overlap=<from super>, int levels=0, int search=2, int searchparam=2, int pelsearch=<pel>, int mvlambda=<auto>, bint chroma=True, int delta=1, bint truemotion=True, int lsad=<auto>, int plevel=<auto>, bint globalmv=<auto>, int pnew=<auto>, int pzero=<pnew>, int pglobal=0, int badsad=10000, int badrange=24, bint meander=True, bint trymany=False, bint fields=False, bint tff=False, bint satd=False, str prefix="MVUtensils"])
+core.mvu.Analyse(clip super[, int[] blksize=<from super>, int[] overlap=<from super>, int levels=0, int search=2, int searchparam=2, int pelsearch=<pel>, int mvlambda=<auto>, bint chroma=True, int delta=1, bint truemotion=True, int lsad=<auto>, int plevel=<auto>, bint globalmv=<truemotion>, int pnew=<auto>, int pzero=<pnew>, int pglobal=0, int badsad=10000, int badrange=24, bint meander=True, bint trymany=False, bint fields=False, bint tff=False, bint satd=False, str prefix="MVUtensils"])
 ```
 
 | Parameter | Type | Options (Default) | Description |
 | --- | --- | --- | --- |
-| super | clip | (required) | Super clip from `Super` (built with `alllevels=True`). |
+| super | clip | (required) | Super clip from `Super` (built with `onelevel=False`). |
 | blksize | int[] | (super's value) | Block size `[h, v]`. Smaller = more accurate but slower. |
 | overlap | int[] | (super's value) | Block overlap `[h, v]`, ≤ blksize/2. More overlap = smoother field, slower. |
 | levels | int | (0 = all) | Number of hierarchical levels to use. 0 uses all available. |
@@ -215,7 +215,7 @@ core.mvu.Recalculate(clip super, clip vectors[, int thsad=200, bint smooth=True,
 
 | Parameter | Type | Options (Default) | Description |
 | --- | --- | --- | --- |
-| super | clip | (required) | Super clip. Only one level is needed, so build it with `alllevels=False`. |
+| super | clip | (required) | Super clip. Only one level is needed. |
 | vectors | clip | (required) | Vector clip to refine. |
 | thsad | int | (200) | Blocks whose SAD is below this keep their vector; worse blocks are re-searched. |
 | smooth | bint | (True) | Interpolate the new (finer) vector field from neighbours (True) or take the nearest old vector (False). `smooth=False` roughly matches the old `divide=1` behaviour, `smooth=True` ≈ `divide=2`. |
@@ -227,7 +227,7 @@ Other parameters (`search`, `searchparam`, `mvlambda`, `chroma`, `truemotion`, `
 
 > **Porting:** `Recalculate` will raise an error if the chosen `blksize`/`overlap` can't cover the
 > whole frame (unlike `Super`, which pads). Halving `blksize`+`overlap` and reusing the existing
-> super usually works; unusual splits may need a fresh super.
+> super usually works, unusual splits may need a new super clip.
 
 ## Degrain
 
@@ -244,7 +244,7 @@ core.mvu.Degrain(clip clip, clip super, clip[] vectors[, int[] thsad=[400, 400],
 | Parameter | Type | Options (Default) | Description |
 | --- | --- | --- | --- |
 | clip | 8–16 bit integer or 32 bit float, GRAY/YUV | | Clip to denoise. |
-| super | clip | (required) | Super clip (only level 0 is needed, so `alllevels=False`). |
+| super | clip | (required) | Super clip. |
 | vectors | clip[] | (required) | Vector clips in `AnalyseMany` order: `[bw1, fw1, bw2, fw2, …]`. Their count selects the radius. |
 | thsad | int[] | ([400, 400]) | SAD `[luma, chroma]` at which a reference block's weight reaches zero. Higher = stronger denoising. Chroma defaults to the luma value. |
 | planes | int[] | ([0, 1, 2]) | Which planes to process; unprocessed planes are copied. |
@@ -264,7 +264,7 @@ out = core.mvu.Degrain(clip, super, v, thsad=[400, 300])
 ## Compensate
 
 Builds a single motion-compensated frame: each block is copied from the reference frame at its
-motion vector (useful for building your own temporal filters).
+motion vector.
 
 ```py
 core.mvu.Compensate(clip clip, clip super, clip vectors[, int thsad=10000, bint fields=False, float time=100.0, int thscd1=400, int thscd2=130, bint tff=False, str prefix="MVUtensils"])
@@ -393,7 +393,7 @@ core.mvu.OcclusionMask(clip vectors[, ...same...])
 ## SCDetection
 
 Marks scene-change frames (using the vector clip's SAD statistics) by setting the
-`_SceneChangePrev`/`_SceneChangeNext` frame properties; the pixels are passed through unchanged.
+`_SceneChangePrev`/`_SceneChangeNext` frame properties.
 
 ```py
 core.mvu.SCDetection(clip clip, clip vectors[, int thscd1=400, int thscd2=130, str prefix="MVUtensils"])
@@ -422,7 +422,7 @@ They work in two stages:
    global motion — e.g. to undo, re-apply or align a camera move.
 
 ```py
-# Stabilise shaky footage, estimating motion straight from the pixels
+# Stabilise shaky footage, estimating motion using whole frame correlation
 data = core.mvu.DepanEstimate(clip)
 out  = core.mvu.DepanStabilise(clip, data)
 
@@ -435,8 +435,7 @@ out  = core.mvu.DepanStabilise(clip, data)
 ### DepanEstimate
 
 Measures each frame's global motion (pan, optional zoom) directly from the image content and stores
-it as frame properties. Outputs a *data* clip for `DepanStabilise`/`DepanCompensate` (the pixels are
-the input passed through).
+it as frame properties. Outputs a *data* clip for `DepanStabilise`/`DepanCompensate`.
 
 ```py
 core.mvu.DepanEstimate(clip clip[, float trust=4.0, int winx=0, int winy=0, int wleft=-1, int wtop=-1, int dxmax=-1, int dymax=-1, float zoommax=1.0, float stab=1.0, float pixaspect=1.0, bint info=False, bint show=False, bint fields=False, bint tff=False])
