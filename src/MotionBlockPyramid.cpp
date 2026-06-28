@@ -1591,7 +1591,7 @@ void MotionBlockPyramid::SearchMVs(const FramePyramid &pSrcGOF, const FramePyram
     if (!global)
         pglobal = pzero;
 
-    int bytesPerSample = pSrcGOF.bitsPerSample == 8 ? 1 : (pSrcGOF.bitsPerSample == 32 ? 4 : 2);
+    int bytesPerSample = SelectOnBitsPerSample(pSrcGOF.bitsPerSample, 1, 2, 4);
 
     // Search the motion vectors, for the low details interpolations first
     SearchType searchTypeSmallest = (nLevelCount == 1 || searchType == SearchType::Horizontal || searchType == SearchType::Vertical) ? searchType : SearchType::Exhaustive; // full search for smallest coarse plane
@@ -1638,7 +1638,7 @@ void MotionBlockPyramid::RecalculateMVs(const FramePyramid &pSrcGOF, const Frame
     if (!pSrcGOF.IsCompatible(pRefGOF))
         throw MotionBlockPyramidError("The two reference frames don't have the same format");
 
-    int bytesPerSample = pSrcGOF.bitsPerSample == 8 ? 1 : (pSrcGOF.bitsPerSample == 32 ? 4 : 2);
+    int bytesPerSample = SelectOnBitsPerSample(pSrcGOF.bitsPerSample, 1, 2, 4);
 
     pyramidLevels[0].RecalculateMVs(pSrcGOF.GetLevel(0), pRefGOF.GetLevel(0),
         nBlkSizeX, nBlkSizeY, nOverlapX, nOverlapY, chroma,

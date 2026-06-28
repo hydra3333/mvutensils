@@ -1141,7 +1141,9 @@ bool FramePyramid::IsCompatibleWithSource(const VSVideoInfo *vi) const noexcept 
         return false;
     if (vi->format.numPlanes != (chroma ? 3 : 1))
         return false;
-    if (nRealWidth[0] != vi->width || nRealHeight[0] != vi->height || (xRatioUV != 1 << vi->format.subSamplingW) || yRatioUV != (1 << vi->format.subSamplingH) || bitsPerSample != vi->format.bitsPerSample)
+    if (nRealWidth[0] != vi->width || nRealHeight[0] != vi->height || (xRatioUV != 1 << vi->format.subSamplingW)
+        || yRatioUV != (1 << vi->format.subSamplingH) || bitsPerSample != vi->format.bitsPerSample
+        || (bitsPerSample == 32 && vi->format.sampleType != stFloat) || (bitsPerSample <= 16 && vi->format.sampleType != stInteger))
         return false;
     return true;
 }

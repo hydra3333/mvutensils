@@ -355,7 +355,7 @@ static void VS_CC compensateCreate(const VSMap *in, VSMap *out, [[maybe_unused]]
         d->thSAD = d->thSAD * d->nSCD1 / nSCD1_old;
 
         // accumulator is 1x pixel width for float (bytesPerSample 4), 2x for 8/16-bit integer.
-        const int accRatio = d->vi->format.bytesPerSample == 4 ? 1 : 2;
+        const int accRatio = (d->vi->format.bytesPerSample == 4) ? 1 : 2;
         d->dstTempPitch = ((vectors.nWidth + 15) / 16) * 16 * d->vi->format.bytesPerSample * accRatio;
         d->dstTempPitchUV = (((vectors.nWidth / vectors.xRatioUV) + 15) / 16) * 16 * d->vi->format.bytesPerSample * accRatio;
 
