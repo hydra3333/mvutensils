@@ -543,7 +543,7 @@ static void Average2(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RESTRICT pS
 }
 
 template<typename PixelType>
-void PyramidPlane::GeneratePelPlanes(int pel, SharpParam sharp, VSCore *core, const VSAPI *vsapi) noexcept {
+void PyramidPlane::GeneratePelPlanes(SharpParam sharp, const VSAPI *vsapi) noexcept {
     // FIXME, weird types and maybe shouldn't even be a function pointer
     typedef void (*RefineFunction)(uint8_t *pDst, const uint8_t *pSrc, ptrdiff_t nPitch, int nWidth, int nHeight, int bitsPerSample);
 
@@ -901,13 +901,13 @@ void FramePyramid::SharedInit(const VSFrame *srcFrame, int levels, int nBlkSizeX
 FramePyramid::FramePyramid(const VSFrame *srcFrame, int levels, int nBlkSizeX, int nBlkSizeY, int nOverlapX, int nOverlapY, int hPad, int vPad, RFilterParam rFilter, int pel, SharpParam sharp, VSCore *core, const VSAPI *vsapi) {
     SharedInit(srcFrame, levels, nBlkSizeX, nBlkSizeY, nOverlapX, nOverlapY, hPad, vPad, rFilter, pel, core, vsapi);
     if (pel > 1)
-        GeneratePelPlanes(sharp, core, vsapi);
+        GeneratePelPlanes(sharp, vsapi);
 }
 
 FramePyramid::FramePyramid(const VSFrame *srcFrame, int levels, int nBlkSizeX, int nBlkSizeY, int nOverlapX, int nOverlapY, int hPad, int vPad, RFilterParam rFilter, int pel, const VSFrame *pelFrame, VSCore *core, const VSAPI *vsapi) {
     SharedInit(srcFrame, levels, nBlkSizeX, nBlkSizeY, nOverlapX, nOverlapY, hPad, vPad, rFilter, pel, core, vsapi);
     if (pel > 1)
-        SetExternalPelPlanes(pelFrame, core, vsapi);
+        SetExternalPelPlanes(pelFrame, vsapi);
 }
 
 void FramePyramid::LoadFrameData(const VSFrame *srcFrame, int maxLevel, const std::string &prefix) {
@@ -1050,22 +1050,22 @@ FramePyramid::~FramePyramid() {
     FreeFrames();
 }
 
-void FramePyramid::GeneratePelPlanes(SharpParam sharp, VSCore *core, const VSAPI *vsapi) {
+void FramePyramid::GeneratePelPlanes(SharpParam sharp, const VSAPI *vsapi) {
     if (nPel != 2 && nPel != 4)
         throw SuperPyramidError("Pel value must be 2 or 4");
     if (bitsPerSample == 8) {
         for (int plane = 0; plane < (chroma ? 3 : 1); plane++)
-            pyramidLevels[0].planes[plane].GeneratePelPlanes<uint8_t>(nPel, sharp, core, vsapi);
+            pyramidLevels[0].planes[plane].GeneratePelPlanes<uint8_t>(sharp, vsapi);
     } else if (bitsPerSample == 32) {
         for (int plane = 0; plane < (chroma ? 3 : 1); plane++)
-            pyramidLevels[0].planes[plane].GeneratePelPlanes<float>(nPel, sharp, core, vsapi);
+            pyramidLevels[0].planes[plane].GeneratePelPlanes<float>(sharp, vsapi);
     } else {
         for (int plane = 0; plane < (chroma ? 3 : 1); plane++)
-            pyramidLevels[0].planes[plane].GeneratePelPlanes<uint16_t>(nPel, sharp, core, vsapi);
+            pyramidLevels[0].planes[plane].GeneratePelPlanes<uint16_t>(sharp, vsapi);
     }
 }
 
-void FramePyramid::SetExternalPelPlanes(const VSFrame *pelFrame, VSCore *core, const VSAPI *vsapi) {
+void FramePyramid::SetExternalPelPlanes(const VSFrame *pelFrame, const VSAPI *vsapi) {
     if (nPel != 2 && nPel != 4)
         throw SuperPyramidError("Pel value must be 2 or 4");
 

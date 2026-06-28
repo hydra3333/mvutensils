@@ -125,7 +125,7 @@ private:
     void ReducePlane(const PyramidPlane &src, int xRatioUV, int yRatioUV, RFilterParam rFilter, uint8_t *tempBuffer, VSCore *core, const VSAPI *vsapi) noexcept;
 
     template<typename PixelType>
-    void GeneratePelPlanes(int pel, SharpParam sharp, VSCore *core, const VSAPI *vsapi) noexcept;
+    void GeneratePelPlanes(SharpParam sharp, const VSAPI *vsapi) noexcept;
 
     template<typename PixelType>
     void SetExternalPelPlanes(const VSFrame *pelFrame, int plane, const VSAPI *vsapi);
@@ -184,8 +184,8 @@ private:
     const VSAPI *vsapi;
     void FreeFrames() noexcept;
     void LoadFrameData(const VSFrame *srcFrame, int maxLevel, const std::string &prefix);
-    void GeneratePelPlanes(SharpParam sharp, VSCore *core, const VSAPI *vsapi);
-    void SetExternalPelPlanes(const VSFrame *pelFrame, VSCore *core, const VSAPI *vsapi);
+    void GeneratePelPlanes(SharpParam sharp, const VSAPI *vsapi);
+    void SetExternalPelPlanes(const VSFrame *pelFrame, const VSAPI *vsapi);
     void SharedInit(const VSFrame *srcFrame, int levels, int nBlkSizeX, int nBlkSizeY, int nOverlapX, int nOverlapY, int hPad, int vPad, RFilterParam rFilter, int pel, VSCore *core, const VSAPI *vsapi);
 public:
     // Constructor to build from source frame with generated subpel frame, does not take ownership of srcFrame
