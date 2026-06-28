@@ -98,10 +98,8 @@ static const VSFrame *VS_CC compensateGetFrame(int n, int activationReason, void
             // Construct (and validate) the vectors inside the try: deserialization can throw on corrupt data.
             MotionBlockPyramid vectors(vsapi->getFrameFilter(n, d->vectors, frameCtx), 1, d->prefix, vsapi);
 
-            const int xRatioUV = vectors.xRatioUV;
-            const int yRatioUV = vectors.yRatioUV;
-            const int ySubUV = (yRatioUV == 2) ? 1 : 0;
-            const int xSubUV = (xRatioUV == 2) ? 1 : 0;
+            const int ySubUV = ilog2(vectors.yRatioUV);
+            const int xSubUV = ilog2(vectors.xRatioUV);
             const int nWidth[3] = { vectors.nWidth, nWidth[0] >> xSubUV, nWidth[1] };
             const int nHeight[3] = { vectors.nHeight, nHeight[0] >> ySubUV, nHeight[1] };
             const int nOverlapX[3] = { vectors.nOverlapX, nOverlapX[0] >> xSubUV, nOverlapX[1] };

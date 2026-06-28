@@ -134,11 +134,9 @@ static const VSFrame *VS_CC flowblurGetFrame(int n, int activationReason, void *
     FlowBlurData *d = reinterpret_cast<FlowBlurData *>(instanceData);
 
     if (activationReason == arInitial) {
-        int off = d->deltaFrame; // integer offset of reference frame
-
-        if (n + off >= 0 && n - off < d->vi->numFrames) {
-            vsapi->requestFrameFilter(n + off, d->mvbw, frameCtx);
-            vsapi->requestFrameFilter(n - off, d->mvfw, frameCtx);
+        if (n + d->deltaFrame >= 0 && n - d->deltaFrame < d->vi->numFrames) {
+            vsapi->requestFrameFilter(n + d->deltaFrame, d->mvbw, frameCtx);
+            vsapi->requestFrameFilter(n - d->deltaFrame, d->mvfw, frameCtx);
         }
 
         vsapi->requestFrameFilter(n, d->super, frameCtx);
@@ -147,11 +145,10 @@ static const VSFrame *VS_CC flowblurGetFrame(int n, int activationReason, void *
         VSFrame *dst = nullptr;
 
         try {
-            int off = d->deltaFrame;
-            bool vectorsLoadFrame = (n + off >= 0 && n - off < d->vi->numFrames);
+            bool vectorsLoadFrame = (n + d->deltaFrame >= 0 && n - d->deltaFrame < d->vi->numFrames);
 
-            MotionBlockPyramid vectorsfw(vectorsLoadFrame ? vsapi->getFrameFilter(n - off, d->mvfw, frameCtx) : nullptr, 1, d->prefix, vsapi);
-            MotionBlockPyramid vectorsbw(vectorsLoadFrame ? vsapi->getFrameFilter(n + off, d->mvbw, frameCtx) : nullptr, 1, d->prefix, vsapi);
+            MotionBlockPyramid vectorsfw(vectorsLoadFrame ? vsapi->getFrameFilter(n - d->deltaFrame, d->mvfw, frameCtx) : nullptr, 1, d->prefix, vsapi);
+            MotionBlockPyramid vectorsbw(vectorsLoadFrame ? vsapi->getFrameFilter(n + d->deltaFrame, d->mvbw, frameCtx) : nullptr, 1, d->prefix, vsapi);
 
             if (vectorsfw.IsUsable(d->thscd1, d->thscd2) && vectorsbw.IsUsable(d->thscd1, d->thscd2)) {
                 const VSFrame *src = vsapi->getFrameFilter(n, d->node, frameCtx);
