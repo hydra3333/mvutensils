@@ -200,12 +200,12 @@ static const VSFrame *VS_CC compensateGetFrame(int n, int activationReason, void
                     }
                 } else { // overlap
                     uint8_t *DstTemp[3] = {};
-                    std::unique_ptr<uint8_t, decltype(&mvu_aligned_free)> DstTempBuffers[3] = { {nullptr, mvu_aligned_free}, {nullptr, mvu_aligned_free}, {nullptr, mvu_aligned_free} };
+                    MvuAlignedPtr<uint8_t> DstTempBuffers[3] = { {nullptr, mvu_aligned_free}, {nullptr, mvu_aligned_free}, {nullptr, mvu_aligned_free} };
 
                     // Allocate buffer for only nBlkSizeY rows instead of full frame height
                     // We'll output finalized rows and reuse the buffer as a sliding window
                     for (int plane = 0; plane < num_planes; plane++) {
-                        DstTempBuffers[plane] = std::unique_ptr<uint8_t, decltype(&mvu_aligned_free)>(mvu_aligned_malloc<uint8_t>(nBlkSizeY[plane] * dstTempPitch[plane], MVU_MEMORY_ALIGN), mvu_aligned_free);
+                        DstTempBuffers[plane] = mvu_make_aligned<uint8_t>(nBlkSizeY[plane] * dstTempPitch[plane]);
                         DstTemp[plane] = DstTempBuffers[plane].get();
                     }
 
@@ -294,7 +294,7 @@ static const VSFrame *VS_CC compensateGetFrame(int n, int activationReason, void
 
 
 static void VS_CC compensateCreate(const VSMap *in, VSMap *out, [[maybe_unused]] void *userData, VSCore *core, const VSAPI *vsapi) noexcept {
-    std::unique_ptr<CompensateData> d(new CompensateData(vsapi));
+    std::unique_ptr<CompensateData> d = std::make_unique<CompensateData>(vsapi);
     int err;
 
     d->thSAD = vsapi->mapGetInt(in, "thsad", 0, &err);

@@ -183,7 +183,7 @@ static const VSFrame *VS_CC degrainGetFrame(int n, int activationReason, void *i
             const int64_t *thSAD = d->thSAD;
 
             OverlapWindows *OverWins[3] = { &d->OverWins[0], &d->OverWins[1], &d->OverWins[2] };
-            std::unique_ptr<uint8_t, decltype(&mvu_aligned_free)> DstTempAlloc(nullptr, mvu_aligned_free);
+            MvuAlignedPtr<uint8_t> DstTempAlloc(nullptr, mvu_aligned_free);
             uint8_t *DstTemp = nullptr;
             int tmpBlockPitch = nBlkSizeX[0] * bytesPerSample;
             if (nOverlapX[0] > 0 || nOverlapY[0] > 0) {
@@ -191,7 +191,7 @@ static const VSFrame *VS_CC degrainGetFrame(int n, int activationReason, void *i
                 DstTemp = DstTempAlloc.get();
             }
 
-            std::unique_ptr<uint8_t, decltype(&mvu_aligned_free)> tmpBlockAlloc(mvu_aligned_malloc<uint8_t>(tmpBlockPitch * nBlkSizeY[0], MVU_MEMORY_ALIGN), mvu_aligned_free);
+            auto tmpBlockAlloc = mvu_make_aligned<uint8_t>(tmpBlockPitch * nBlkSizeY[0]);
             uint8_t *tmpBlock = tmpBlockAlloc.get();
 
             const FramePyramidLevel *pPlanes[radius * 2] = {};

@@ -105,7 +105,7 @@ static const VSFrame *VS_CC maskGetFrame(int n, int activationReason, void *inst
 }
 
 static void VS_CC maskCreate(const VSMap *in, VSMap *out, void *userData, VSCore *core, const VSAPI *vsapi) noexcept {
-    std::unique_ptr<MaskData> d(new MaskData(vsapi));
+    std::unique_ptr<MaskData> d = std::make_unique<MaskData>(vsapi);
 
     int err;
 

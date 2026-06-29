@@ -51,13 +51,13 @@ public:
         return GetTileBuffersImpl(std::make_index_sequence<N>{});
     }
 
-    static std::unique_ptr<void, decltype(&mvu_aligned_free)> GetTmpBuffer(size_t size) {
-        return std::unique_ptr<void, decltype(&mvu_aligned_free)>{ mvu_aligned_malloc<void>(size, MVU_MEMORY_ALIGN), mvu_aligned_free };
+    static MvuAlignedPtr<void> GetTmpBuffer(size_t size) {
+        return mvu_make_aligned<void>(size);
     }
 
 private:
-    static std::unique_ptr<uint16_t, decltype(&mvu_aligned_free)> GetTileBuffer() {
-        return std::unique_ptr<uint16_t, decltype(&mvu_aligned_free)>{ mvu_aligned_malloc<uint16_t>(GetTileBufferStride() *TileSize, MVU_MEMORY_ALIGN), mvu_aligned_free };
+    static MvuAlignedPtr<uint16_t> GetTileBuffer() {
+        return mvu_make_aligned<uint16_t>(GetTileBufferStride() * TileSize);
     }
 
     template <size_t... Is>
@@ -88,5 +88,5 @@ public:
     void Process(uint8_t *dst, ptrdiff_t dststride, const void *src, ptrdiff_t srcstride);
 private:
     mvuzimgxx::FilterGraph graph;
-    std::unique_ptr<void, decltype(&mvu_aligned_free)> tmp = std::unique_ptr<void, decltype(&mvu_aligned_free)>(nullptr, mvu_aligned_free);
+    MvuAlignedPtr<void> tmp{ nullptr, mvu_aligned_free };
 };

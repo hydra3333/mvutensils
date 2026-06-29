@@ -5,6 +5,7 @@
 #include <cstring>
 #include <algorithm>
 #include <bit>
+#include <memory>
 #ifdef _WIN32
 #include <malloc.h>
 #else 
@@ -84,9 +85,17 @@ static inline T *mvu_aligned_malloc(size_t size, size_t alignment) {
 static inline void mvu_aligned_free(void *ptr) {
 #ifdef _WIN32
     _aligned_free(ptr);
-#else 
+#else
     free(ptr);
 #endif
+}
+
+template<typename T> using MvuAlignedPtr = std::unique_ptr<T, decltype(&mvu_aligned_free)>;
+
+// Owning aligned allocation (size in bytes, matching mvu_aligned_malloc); pairs with MvuAlignedPtr.
+template<typename T>
+static inline MvuAlignedPtr<T> mvu_make_aligned(size_t size) {
+    return { mvu_aligned_malloc<T>(size, MVU_MEMORY_ALIGN), mvu_aligned_free };
 }
 
 // Resolve the field order for frame n from its frame properties.

@@ -609,7 +609,7 @@ static int fillBorderNext(VSFrame *dst, DepanStabiliseData *d, int ndest, const 
 
     // get motion info about the next frames in interval from dest+1 to nnext (forward order)
     {
-        std::lock_guard<std::mutex> guard(d->motion_mutex);
+        std::scoped_lock guard(d->motion_mutex);
 
         for (int n = ndest + 1; n <= nnext; n++) {
             if (!d->motion[n].has_value()) {
@@ -715,7 +715,7 @@ static const VSFrame *VS_CC depanStabiliseGetFrame0(int ndest, int activationRea
     if (activationReason == arInitial) {
         int nprev = std::max(nbase, ndest - d->prev);
 
-        std::lock_guard<std::mutex> guard(d->motion_mutex);
+        std::scoped_lock guard(d->motion_mutex);
 
         for (int i = nbase; i <= ndest; i++) {
             if (!d->motion[i].has_value())
@@ -736,7 +736,7 @@ static const VSFrame *VS_CC depanStabiliseGetFrame0(int ndest, int activationRea
     } else if (activationReason == arAllFramesReady) {
         // get motion info about frames in interval from begin source to dest in reverse order
         {
-            std::lock_guard<std::mutex> guard(d->motion_mutex);
+            std::scoped_lock guard(d->motion_mutex);
 
             for (int n = ndest; n >= nbase; n--) {
                 if (!d->motion[n].has_value()) {
@@ -866,7 +866,7 @@ static const VSFrame *VS_CC depanStabiliseGetFrame1(int ndest, int activationRea
     if (activationReason == arInitial) {
         int nprev = std::max(nbase, ndest - d->prev);
 
-        std::lock_guard<std::mutex> guard(d->motion_mutex);
+        std::scoped_lock guard(d->motion_mutex);
 
         for (int i = nbase; i <= ndest; i++) {
             if (!d->motion[i].has_value())
@@ -910,7 +910,7 @@ static const VSFrame *VS_CC depanStabiliseGetFrame1(int ndest, int activationRea
     } else if (activationReason == arAllFramesReady) {
         // get motion info about frames in interval from begin source to dest in reverse order
         {
-            std::lock_guard<std::mutex> guard(d->motion_mutex);
+            std::scoped_lock guard(d->motion_mutex);
 
             for (int n = ndest; n >= nbase; n--) {
                 if (!d->motion[n].has_value()) {

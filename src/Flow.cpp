@@ -168,7 +168,7 @@ static const VSFrame *VS_CC flowGetFrame(int n, int activationReason, void *inst
 }
 
 static void VS_CC flowCreate(const VSMap *in, VSMap *out, [[maybe_unused]] void *userData, VSCore *core, const VSAPI *vsapi) noexcept {
-    std::unique_ptr<FlowData> d(new FlowData(vsapi));
+    std::unique_ptr<FlowData> d = std::make_unique<FlowData>(vsapi);
 
     int err;
 

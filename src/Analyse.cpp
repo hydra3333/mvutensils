@@ -111,7 +111,7 @@ static const VSFrame *VS_CC analyseGetFrame(int n, int activationReason, void *i
 }
 
 static void VS_CC analyseCreate(const VSMap *in, VSMap *out, [[maybe_unused]] void *userData, VSCore *core, const VSAPI *vsapi) noexcept {
-    std::unique_ptr<AnalyseData> d(new AnalyseData(vsapi));
+    std::unique_ptr<AnalyseData> d = std::make_unique<AnalyseData>(vsapi);
     int err;
 
     try {

@@ -283,7 +283,7 @@ static const VSFrame *VS_CC flowfpsGetFrame(int n, int activationReason, void *i
 }
 
 static void VS_CC flowfpsCreate(const VSMap *in, VSMap *out, [[maybe_unused]] void *userData, VSCore *core, const VSAPI *vsapi) noexcept {
-    std::unique_ptr<FlowFPSData> d(new FlowFPSData(vsapi));
+    std::unique_ptr<FlowFPSData> d = std::make_unique<FlowFPSData>(vsapi);
     int err;
 
     int64_t num = vsapi->mapGetInt(in, "num", 0, &err);

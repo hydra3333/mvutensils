@@ -255,7 +255,7 @@ static const VSFrame *VS_CC flowinterGetFrame(int n, int activationReason, void 
 }
 
 static void VS_CC flowinterCreate(const VSMap *in, VSMap *out, [[maybe_unused]] void *userData, VSCore *core, const VSAPI *vsapi) noexcept {
-    std::unique_ptr<FlowInterData> d(new FlowInterData(vsapi));
+    std::unique_ptr<FlowInterData> d = std::make_unique<FlowInterData>(vsapi);
     int err;
 
     float time = vsapi->mapGetFloatSaturated(in, "time", 0, &err);

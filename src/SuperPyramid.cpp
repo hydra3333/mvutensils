@@ -874,7 +874,7 @@ void FramePyramid::SharedInit(const VSFrame *srcFrame, int levels, int nBlkSizeX
     }
 
     size_t tempBufferSize = static_cast<size_t>(nWidth[0]) * srcFormat->bytesPerSample * 8;
-    std::unique_ptr<uint8_t, decltype(&mvu_aligned_free)> tempBuffer(mvu_aligned_malloc<uint8_t>(tempBufferSize, MVU_MEMORY_ALIGN), mvu_aligned_free);
+    MvuAlignedPtr tempBuffer = mvu_make_aligned<uint8_t>(tempBufferSize);
 
     if (srcFormat->bytesPerSample == 1) {
         for (int plane = 0; plane < (chroma ? 3 : 1); plane++) {

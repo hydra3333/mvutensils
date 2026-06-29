@@ -217,7 +217,7 @@ static const VSFrame *VS_CC flowblurGetFrame(int n, int activationReason, void *
 }
 
 static void VS_CC flowblurCreate(const VSMap *in, VSMap *out, [[maybe_unused]] void *userData, VSCore *core, const VSAPI *vsapi) noexcept {
-    std::unique_ptr<FlowBlurData> d(new FlowBlurData(vsapi));
+    std::unique_ptr<FlowBlurData> d = std::make_unique<FlowBlurData>(vsapi);
     int err;
 
     float blur = vsapi->mapGetFloatSaturated(in, "blur", 0, &err);

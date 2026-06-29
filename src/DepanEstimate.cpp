@@ -64,7 +64,7 @@ struct DepanEstimateData {
     ~DepanEstimateData() {
         vsapi->freeNode(clip);
         {
-            std::lock_guard<std::mutex> guard(g_fftw_plans_mutex);
+            std::scoped_lock guard(g_fftw_plans_mutex);
             if (plan)
                 fftwf_destroy_plan(plan);
             if (planinv)
@@ -771,7 +771,7 @@ static void VS_CC depanEstimateCreate(const VSMap *in, VSMap *out, [[maybe_unuse
 
     fftwf_complex *unused_array = (fftwf_complex *)fftwf_malloc(data1->fftsize);
     {
-        std::lock_guard<std::mutex> guard(g_fftw_plans_mutex);
+        std::scoped_lock guard(g_fftw_plans_mutex);
         data1->plan = fftwf_plan_dft_r2c_2d(data1->winy, data1->winx, (float *)unused_array, unused_array, FFTW_ESTIMATE);    // forward fft (stage1)
         data2->planinv = fftwf_plan_dft_c2r_2d(data1->winy, data1->winx, unused_array, (float *)unused_array, FFTW_ESTIMATE); // inverse fft (stage2)
     }
