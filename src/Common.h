@@ -44,7 +44,7 @@ static void VS_CC filterFree(void *instanceData, [[maybe_unused]] VSCore *core, 
 constexpr int ERROR_SIZE = 1024;
 
 static constexpr const int MV_DEFAULT_SCD1 = 400;
-static constexpr const int MV_DEFAULT_SCD2 = 130;
+static constexpr const float MV_DEFAULT_SCD2 = 51.0f;
 
 static constexpr char DEFAULT_MVUTENSILS_PREFIX[] = "MVUtensils";
 

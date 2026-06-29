@@ -40,7 +40,7 @@ struct FlowData {
     int time256;
     int fields;
     int64_t thscd1;
-    int thscd2;
+    float thscd2;
     bool tff;
     bool tff_exists;
 
@@ -182,7 +182,7 @@ static void VS_CC flowCreate(const VSMap *in, VSMap *out, [[maybe_unused]] void 
     if (err)
         d->thscd1 = MV_DEFAULT_SCD1;
 
-    d->thscd2 = vsapi->mapGetIntSaturated(in, "thscd2", 0, &err);
+    d->thscd2 = vsapi->mapGetFloatSaturated(in, "thscd2", 0, &err);
     if (err)
         d->thscd2 = MV_DEFAULT_SCD2;
 
@@ -253,7 +253,7 @@ void flowRegister(VSPlugin *plugin, const VSPLUGINAPI *vspapi) noexcept {
                  "time:float:opt;"
                  "fields:int:opt;"
                  "thscd1:int:opt;"
-                 "thscd2:int:opt;"
+                 "thscd2:float:opt;"
                  "tff:int:opt;"
                  "prefix:data:opt;",
                  "clip:vnode;",

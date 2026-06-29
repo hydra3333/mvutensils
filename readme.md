@@ -116,7 +116,7 @@ and omitted from the per-function tables below.
 | Parameter | Type | Options (Default) | Description |
 | --- | --- | --- | --- |
 | thscd1 | int | (400) | Scene-change SAD threshold. A block whose SAD exceeds this is considered "changed". The value is defined for an 8×8 luma block at 8-bit and is scaled internally to the actual block size, chroma usage and bit depth. |
-| thscd2 | int | 0–255 (130) | Percentage of changed blocks above which the whole frame is treated as a scene change. On a scene change the consumer leaves the frame unprocessed (passes the source through). |
+| thscd2 | float | 0–100 (51) | Percentage of blocks that must be "changed" (SAD above `thscd1`) for the whole frame to be treated as a scene change. 0 = any single changed block triggers it; 100 = never. On a scene change the consumer leaves the frame unprocessed (passes the source through). |
 | prefix | str | ("MVUtensils") | Prefix of the frame properties read/written by this function. Must match between the producer and consumer of a vector/super clip. |
 
 ## Super

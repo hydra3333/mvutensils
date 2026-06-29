@@ -1356,7 +1356,7 @@ void MotionBlockLevel::RecalculateMVs(const FramePyramidLevel &pSrcFrame, const 
 }
 
 
-bool MotionBlockLevel::IsSceneChange(int64_t nTh1, int nTh2) const noexcept {
+bool MotionBlockLevel::IsSceneChange(int64_t nTh1, float nTh2) const noexcept {
     int sum = 0;
     for (int i = 0; i < nBlkCount; i++)
         sum += (vectors[i].sad > nTh1) ? 1 : 0;
@@ -1703,7 +1703,7 @@ void MotionBlockPyramid::ExportFrameData(VSFrame *dst, const std::string &prefix
     }
 }
 
-bool MotionBlockPyramid::IsUsable(int64_t thscd1, int thscd2) const noexcept {
+bool MotionBlockPyramid::IsUsable(int64_t thscd1, float thscd2) const noexcept {
     return HasMotionVectors() && !pyramidLevels[0].IsSceneChange(thscd1, thscd2);
 }
 
@@ -1724,7 +1724,7 @@ double MotionBlockPyramid::GetThSCDScaleFactor(int bitsPerSample) const {
     return lumaScale * chromaFactor * depthScale;
 }
 
-void MotionBlockPyramid::ScaleThSCD(int64_t &thscd1, int &thscd2, int bitsPerSample) const {
+void MotionBlockPyramid::ScaleThSCD(int64_t &thscd1, float &thscd2, int bitsPerSample) const {
     constexpr int maxSAD = 8 * 8 * 255;
 
     if (thscd1 > maxSAD)
@@ -1733,7 +1733,8 @@ void MotionBlockPyramid::ScaleThSCD(int64_t &thscd1, int &thscd2, int bitsPerSam
     // SCD thresholds
     thscd1 = (int64_t)(thscd1 * GetThSCDScaleFactor(bitsPerSample) + 0.5);
 
-    thscd2 = static_cast<int>(std::min<int64_t>((int64_t)thscd2 * nBlkX * nBlkY / 256, std::numeric_limits<int32_t>::max()));
+    // thscd2 is a percentage (0-100) of the blocks; convert to an absolute (fractional) block count.
+    thscd2 = static_cast<float>((double)thscd2 * nBlkX * nBlkY / 100.0);
 }
 
 MotionBlockPyramid::State MotionBlockPyramid::GetState() const noexcept {

@@ -37,7 +37,7 @@ struct FlowBlurData {
 
     int prec;
     int64_t thscd1;
-    int thscd2;
+    float thscd2;
 
     int blur256;
 
@@ -232,7 +232,7 @@ static void VS_CC flowblurCreate(const VSMap *in, VSMap *out, [[maybe_unused]] v
     if (err)
         d->thscd1 = MV_DEFAULT_SCD1;
 
-    d->thscd2 = vsapi->mapGetIntSaturated(in, "thscd2", 0, &err);
+    d->thscd2 = vsapi->mapGetFloatSaturated(in, "thscd2", 0, &err);
     if (err)
         d->thscd2 = MV_DEFAULT_SCD2;
 
@@ -312,7 +312,7 @@ void flowblurRegister(VSPlugin *plugin, const VSPLUGINAPI *vspapi) noexcept {
                  "blur:float:opt;"
                  "prec:int:opt;"
                  "thscd1:int:opt;"
-                 "thscd2:int:opt;"
+                 "thscd2:float:opt;"
                  "prefix:data:opt;",
                  "clip:vnode;",
                  flowblurCreate, nullptr, plugin);

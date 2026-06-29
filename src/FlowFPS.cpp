@@ -39,7 +39,7 @@ struct FlowFPSData {
     float ml;
     bool blend;
     int64_t thscd1;
-    int thscd2;
+    float thscd2;
 
     int64_t fa;
     int64_t fb;
@@ -310,7 +310,7 @@ static void VS_CC flowfpsCreate(const VSMap *in, VSMap *out, [[maybe_unused]] vo
     if (err)
         d->thscd1 = MV_DEFAULT_SCD1;
 
-    d->thscd2 = vsapi->mapGetIntSaturated(in, "thscd2", 0, &err);
+    d->thscd2 = vsapi->mapGetFloatSaturated(in, "thscd2", 0, &err);
     if (err)
         d->thscd2 = MV_DEFAULT_SCD2;
 
@@ -404,7 +404,7 @@ void flowfpsRegister(VSPlugin *plugin, const VSPLUGINAPI *vspapi) noexcept {
                  "ml:float:opt;"
                  "blend:int:opt;"
                  "thscd1:int:opt;"
-                 "thscd2:int:opt;"
+                 "thscd2:float:opt;"
                  "prefix:data:opt;",
                  "clip:vnode;",
                  flowfpsCreate, nullptr, plugin);

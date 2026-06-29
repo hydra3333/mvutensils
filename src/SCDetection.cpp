@@ -33,7 +33,7 @@ struct SCDetectionData {
     const VSVideoInfo *vi;
 
     int64_t thscd1;
-    int thscd2;
+    float thscd2;
 
     std::string prefix;
 
@@ -85,7 +85,7 @@ static void VS_CC scdetectionCreate(const VSMap *in, VSMap *out, [[maybe_unused]
     if (err)
         d->thscd1 = MV_DEFAULT_SCD1;
 
-    d->thscd2 = vsapi->mapGetIntSaturated(in, "thscd2", 0, &err);
+    d->thscd2 = vsapi->mapGetFloatSaturated(in, "thscd2", 0, &err);
     if (err)
         d->thscd2 = MV_DEFAULT_SCD2;
 
@@ -123,7 +123,7 @@ void scdetectionRegister(VSPlugin *plugin, const VSPLUGINAPI *vspapi) noexcept {
                  "clip:vnode;"
                  "vectors:vnode;"
                  "thscd1:int:opt;"
-                 "thscd2:int:opt;"
+                 "thscd2:float:opt;"
                  "prefix:data:opt;",
                  "clip:vnode;",
                  scdetectionCreate, nullptr, plugin);

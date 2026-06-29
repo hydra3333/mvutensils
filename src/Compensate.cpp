@@ -41,7 +41,7 @@ struct CompensateData {
     bool fields;
     int time256;
     int64_t nSCD1;
-    int nSCD2;
+    float nSCD2;
     int tff;
     int tff_exists;
     int deltaFrame;
@@ -311,7 +311,7 @@ static void VS_CC compensateCreate(const VSMap *in, VSMap *out, [[maybe_unused]]
     if (err)
         d->nSCD1 = MV_DEFAULT_SCD1;
 
-    d->nSCD2 = vsapi->mapGetIntSaturated(in, "thscd2", 0, &err);
+    d->nSCD2 = vsapi->mapGetFloatSaturated(in, "thscd2", 0, &err);
     if (err)
         d->nSCD2 = MV_DEFAULT_SCD2;
 
@@ -405,7 +405,7 @@ void compensateRegister(VSPlugin *plugin, const VSPLUGINAPI *vspapi) noexcept {
                  "fields:int:opt;"
                  "time:float:opt;"
                  "thscd1:int:opt;"
-                 "thscd2:int:opt;"
+                 "thscd2:float:opt;"
                  "tff:int:opt;"
                  "prefix:data:opt;",
                  "clip:vnode;",

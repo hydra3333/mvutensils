@@ -46,7 +46,7 @@ struct DegrainData {
     float fLimit[3];
     bool needsLimit[3];
     int64_t nSCD1;
-    int nSCD2;
+    float nSCD2;
 
     ptrdiff_t dstTempPitch;
 
@@ -477,7 +477,7 @@ static void VS_CC degrainCreate(const VSMap *in, VSMap *out, [[maybe_unused]] vo
     if (err)
         d->nSCD1 = MV_DEFAULT_SCD1;
 
-    d->nSCD2 = vsapi->mapGetIntSaturated(in, "thscd2", 0, &err);
+    d->nSCD2 = vsapi->mapGetFloatSaturated(in, "thscd2", 0, &err);
     if (err)
         d->nSCD2 = MV_DEFAULT_SCD2;
 
@@ -655,7 +655,7 @@ constexpr const char *degrain_args =
     "planes:int[]:opt;"
     "limit:float[]:opt;"
     "thscd1:int:opt;"
-    "thscd2:int:opt;"
+    "thscd2:float:opt;"
     "prefix:data:opt;";
 
 void degrainsRegister(VSPlugin *plugin, const VSPLUGINAPI *vspapi) noexcept {

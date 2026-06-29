@@ -34,6 +34,8 @@ Changes
     
     * More optimized code path, avx2 and avx512 available in most places where it makes sense
     
+    * The thscd2 argument was changed from a 0-256 int to a 0-100 range float to be easier to understand since it's a percentage, in order to keep the numbers more pleasing the previous default of 130/256 has been changed to 51
+    
     * Full float support in all filters except Depan*
 
 * Super:

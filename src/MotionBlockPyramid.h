@@ -220,7 +220,7 @@ public:
     void EstimateGlobalMVDoubled(VECTOR &globalMVec) const noexcept;
     void InterpolatePredictorsFromParent(const MotionBlockLevel &parentLevel) noexcept;
 
-    bool IsSceneChange(int64_t nTh1, int nTh2) const noexcept;
+    bool IsSceneChange(int64_t nTh1, float nTh2) const noexcept;
 
     void Initialize(int _nBlkX, int _nBlkY, int _nBlkSizeX, int _nBlkSizeY, int _nPel, int _nLevel, bool smallestPlane, bool chroma, int _nOverlapX, int _nOverlapY, int _xRatioUV, int _yRatioUV, int bitsPerSample) noexcept;
 
@@ -298,10 +298,10 @@ public:
         SearchType searchType, int nSearchParam, int64_t nLambda, int pnew,
         int fieldShift, int64_t thSAD, bool useSatd, bool smooth, bool meander);
 
-    [[nodiscard]] bool IsUsable(int64_t thscd1, int thscd2) const noexcept;
+    [[nodiscard]] bool IsUsable(int64_t thscd1, float thscd2) const noexcept;
     [[nodiscard]] BlockData GetBlock(int nBlk) const noexcept;
     [[nodiscard]] double GetThSCDScaleFactor(int bitsPerSample) const;
-    void ScaleThSCD(int64_t &thscd1, int &thscd2, int bitsPerSample) const;
+    void ScaleThSCD(int64_t &thscd1, float &thscd2, int bitsPerSample) const;
     [[nodiscard]] State GetState() const noexcept;
     [[nodiscard]] bool HasMotionVectors() const noexcept;
 

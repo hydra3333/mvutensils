@@ -28,7 +28,7 @@ struct DepanAnalyseData {
     float wrong = 0.0f;
     float zerow = 0.0f;
     int64_t thscd1 = 0;
-    int thscd2 = 0;
+    float thscd2 = 0;
     bool fields = false;
     bool tff = false;
     bool tff_exists = false;
@@ -346,7 +346,7 @@ static void VS_CC depanAnalyseCreate(const VSMap *in, VSMap *out, [[maybe_unused
         if (err)
             d->thscd1 = MV_DEFAULT_SCD1;
 
-        d->thscd2 = vsapi->mapGetIntSaturated(in, "thscd2", 0, &err);
+        d->thscd2 = vsapi->mapGetFloatSaturated(in, "thscd2", 0, &err);
         if (err)
             d->thscd2 = MV_DEFAULT_SCD2;
 
@@ -440,7 +440,7 @@ void depanAnalyseRegister(VSPlugin *plugin, const VSPLUGINAPI *vspapi) {
                  "wrong:float:opt;"
                  "zerow:float:opt;"
                  "thscd1:int:opt;"
-                 "thscd2:int:opt;"
+                 "thscd2:float:opt;"
                  "fields:int:opt;"
                  "tff:int:opt;",
                  "clip:vnode;",
