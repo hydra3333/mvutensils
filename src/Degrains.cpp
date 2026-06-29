@@ -22,7 +22,6 @@
 #include <unordered_map>
 #include <memory>
 #include <cmath>
-#include <climits>
 #include <limits>
 
 #include <VapourSynth4.h>
@@ -537,10 +536,10 @@ static void VS_CC degrainCreate(const VSMap *in, VSMap *out, [[maybe_unused]] vo
         d->thSAD[1] = static_cast<int64_t>(d->thSAD[1] * thscdScale + .5);
         d->thSAD[2] = d->thSAD[1];
 
-        if (d->thSAD[0] >= INT_MAX || d->thSAD[1] >= INT_MAX) {
-            int64_t maximum = static_cast<int64_t>(INT_MAX * thscdScale + .5);
+        if (d->thSAD[0] >= std::numeric_limits<int>::max() || d->thSAD[1] >= std::numeric_limits<int>::max()) {
+            int64_t maximum = static_cast<int64_t>(std::numeric_limits<int>::max() * thscdScale + .5);
 
-            bool c = d->thSAD[0] < INT_MAX;
+            bool c = d->thSAD[0] < std::numeric_limits<int>::max();
 
             throw std::runtime_error("with this block size and video format, thsad" + std::string(c ? "c" : "") + " must not exceed " + std::to_string(maximum) + " or some calculations would overflow");
         }

@@ -544,8 +544,7 @@ static void Average2(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RESTRICT pS
 
 template<typename PixelType>
 void PyramidPlane::GeneratePelPlanes(SharpParam sharp, const VSAPI *vsapi) noexcept {
-    // FIXME, weird types and maybe shouldn't even be a function pointer
-    typedef void (*RefineFunction)(uint8_t *pDst, const uint8_t *pSrc, ptrdiff_t nPitch, int nWidth, int nHeight, int bitsPerSample);
+    using RefineFunction = void (*)(uint8_t *pDst, const uint8_t *pSrc, ptrdiff_t nPitch, int nWidth, int nHeight, int bitsPerSample);
 
     RefineFunction refine[3];
 

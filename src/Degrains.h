@@ -25,7 +25,7 @@ enum VectorOrder {
 };
 
 
-typedef void (*DenoiseFunction)(uint8_t *pDst, ptrdiff_t nDstPitch, const uint8_t *pSrc, ptrdiff_t nSrcPitch, const uint8_t **_pRefs, ptrdiff_t nRefPitch, uint16_t WSrc, const uint16_t *WRefs) noexcept;
+using DenoiseFunction = void (*)(uint8_t *pDst, ptrdiff_t nDstPitch, const uint8_t *pSrc, ptrdiff_t nSrcPitch, const uint8_t **_pRefs, ptrdiff_t nRefPitch, uint16_t WSrc, const uint16_t *WRefs) noexcept;
 
 
 // XXX Both Degrain_C8/Degrain_C16 move the pointers passed in pRefs8. This is okay

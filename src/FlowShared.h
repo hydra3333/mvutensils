@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <algorithm>
 #include <type_traits>
+#include <limits>
 #include "SuperPyramid.h"
 #include "Common.h"
 #include "CPU.h"
@@ -73,7 +74,7 @@ void FlowFetch_avx2_f32(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &
 // fall back to the (64-bit, unlimited) scalar above it. Centering ~doubles the ceiling vs a pPlane[0] base.
 static MVU_FORCE_INLINE bool FlowGatherFits(const PyramidPlane &p) {
     const int n = p.nPel * p.nPel;
-    return (int64_t)p.subPelPlaneOffset * (n - n / 2) <= INT32_MAX;
+    return (int64_t)p.subPelPlaneOffset * (n - n / 2) <= std::numeric_limits<int32_t>::max();
 }
 #endif
 

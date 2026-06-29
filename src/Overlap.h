@@ -42,9 +42,9 @@ public:
 
 
 
-typedef void (*OverlapsFunction)(uint8_t *pDst, ptrdiff_t nDstPitch,
-                                 const uint8_t *pSrc, ptrdiff_t nSrcPitch,
-                                 const int16_t *pWin, ptrdiff_t nWinPitch);
+using OverlapsFunction = void (*)(uint8_t *pDst, ptrdiff_t nDstPitch,
+                                  const uint8_t *pSrc, ptrdiff_t nSrcPitch,
+                                  const int16_t *pWin, ptrdiff_t nWinPitch);
 
 
 template <typename PixelType>

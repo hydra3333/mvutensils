@@ -22,8 +22,8 @@
 #include <cstdint>
 
 
-typedef unsigned int (*SADFunction)(const uint8_t *pSrc, intptr_t nSrcPitch,
-                                    const uint8_t *pRef, intptr_t nRefPitch) noexcept;
+using SADFunction = unsigned int (*)(const uint8_t *pSrc, intptr_t nSrcPitch,
+                                     const uint8_t *pRef, intptr_t nRefPitch) noexcept;
 
 
 SADFunction selectSADFunction(unsigned width, unsigned height, unsigned bits);

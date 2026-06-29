@@ -2,7 +2,7 @@
 
 #include <functional>
 #include <algorithm>
-#include <climits>
+#include <limits>
 #include <memory>
 #include <cmath>
 #include "Common.h"
@@ -372,20 +372,11 @@ static int Median(int a, int b, int c) {
     return std::max(std::min(a, b), std::min(std::max(a, b), c));
 }
 
-
-static constexpr int satz(int a) noexcept {
-    return std::max(a, 0); // saturate-to-zero; std::max wrapper
-}
-
-static constexpr int iexp2(int i) noexcept {
-    return 1 << satz(i); // 2^max(i,0); no std equivalent for integer base-2 exponentiation
-}
-
 void MotionBlockLevel::Initialize(int _nBlkX, int _nBlkY, int _nBlkSizeX, int _nBlkSizeY, int nPel_, int _nLevel, bool smallestPlane_, bool chroma_, int _nOverlapX, int _nOverlapY, int _xRatioUV, int _yRatioUV, int bitsPerSample) noexcept {
     nPel = nPel_;
     nLogPel = ilog2(nPel);
     nLogScale = _nLevel;
-    nScale = iexp2(nLogScale);
+    nScale = 1 << nLogScale;
 
     nBlkSizeX = _nBlkSizeX;
     nBlkSizeY = _nBlkSizeY;
@@ -852,18 +843,18 @@ void MotionBlockLevel::PseudoEPZSearch(int blkIdx, int blkx, int blky, int blkSc
         if ((p.x == zeroMVfieldShifted.x && p.y == zeroMVfieldShifted.y) ||
             (p.x == globalMVPredictor.x && p.y == globalMVPredictor.y) ||
             (p.x == predictor.x && p.y == predictor.y))
-            p.x = INT_MIN;
+            p.x = std::numeric_limits<int>::min();
     }
 
     for (int i = 0; i < npred; i++) {
-        if (predictors[i].x == INT_MIN) {
+        if (predictors[i].x == std::numeric_limits<int>::min()) {
             if (tryMany)
                 nMinCostMany[i + 3] = verybigSAD + 1;
             continue;
         }
         for (int j = i + 1; j < npred; j++) {
             if (predictors[j].x == predictors[i].x && predictors[j].y == predictors[i].y)
-                predictors[j].x = INT_MIN;
+                predictors[j].x = std::numeric_limits<int>::min();
         }
         if (tryMany)
             nMinCost = verybigSAD + 1;
@@ -1742,7 +1733,7 @@ void MotionBlockPyramid::ScaleThSCD(int64_t &thscd1, int &thscd2, int bitsPerSam
     // SCD thresholds
     thscd1 = (int64_t)(thscd1 * GetThSCDScaleFactor(bitsPerSample) + 0.5);
 
-    thscd2 = static_cast<int>(std::min<int64_t>((int64_t)thscd2 * nBlkX * nBlkY / 256, INT32_MAX));
+    thscd2 = static_cast<int>(std::min<int64_t>((int64_t)thscd2 * nBlkX * nBlkY / 256, std::numeric_limits<int32_t>::max()));
 }
 
 MotionBlockPyramid::State MotionBlockPyramid::GetState() const noexcept {

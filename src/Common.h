@@ -74,7 +74,7 @@ static inline T *mvu_aligned_malloc(size_t size, size_t alignment) {
 #ifdef _WIN32
     return (T *)_aligned_malloc(size, alignment);
 #else
-    void *tmp = NULL;
+    void *tmp = nullptr;
     if (posix_memalign(&tmp, alignment, size))
         tmp = 0;
     return (T *)tmp;
