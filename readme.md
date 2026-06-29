@@ -149,7 +149,7 @@ core.mvu.Super(clip clip, int[] blksize, int[] overlap[, int[] pad=[16, 16], int
 Estimates a field of motion vectors for one temporal direction/distance.
 
 ```py
-core.mvu.Analyse(clip super[, int[] blksize=<from super>, int[] overlap=<from super>, int levels=0, int search=2, int searchparam=2, int pelsearch=<pel>, int mvlambda=<auto>, bint chroma=True, int delta=1, int lsad=400, int plevel=1, bint globalmv=True, int pnew=25, int pzero=<pnew>, int pglobal=0, int badsad=10000, int badrange=24, bint meander=True, bint trymany=False, bint fields=False, bint tff=False, bint satd=False, str prefix="MVUtensils"])
+core.mvu.Analyse(clip super[, int[] blksize=<from super>, int[] overlap=<from super>, int levels=0, int search=2, int searchparam=2, int pelsearch=<pel>, int mvlambda=1000, bint chroma=True, int delta=1, int lsad=400, int plevel=1, bint globalmv=True, int pnew=25, int pzero=<pnew>, int pglobal=0, int badsad=10000, int badrange=24, bint meander=True, bint trymany=False, bint fields=False, bint tff=False, bint satd=False, str prefix="MVUtensils"])
 ```
 
 | Parameter | Type | Options (Default) | Description |
@@ -161,16 +161,16 @@ core.mvu.Analyse(clip super[, int[] blksize=<from super>, int[] overlap=<from su
 | search | int | 0–5 (2) | Search algorithm: 0 = logarithmic/diamond, 1 = exhaustive, 2 = hexagon, 3 = uneven multi-hexagon (UMH), 4 = horizontal, 5 = vertical. |
 | searchparam | int | (2) | Search radius/step for the chosen `search`. |
 | pelsearch | int | (super's pel) | Refinement search radius at the finest (sub-pixel) level. |
-| mvlambda | int | (1000·blksizeh·blksizev/64) | Weight of the motion-coherence penalty (see [below](#motion-coherence-tuning-mvlambda-lsad-plevel)). Higher favours smooth, spatially consistent fields; `0` disables the penalty and takes the pure lowest-SAD match per block. The value is scaled internally for bit depth, `pel` and level, and the default scales with block area (1000 at the standard 8×8 block). |
+| mvlambda | int | (1000) | Weight of the motion-coherence penalty (see [below](#motion-coherence-tuning-mvlambda-lsad-plevel)), **given per 8×8 block**: the value is multiplied internally by `blksizeh·blksizev/64` so the same setting behaves consistently at any block size (the same normalisation `lsad` and `badsad` use), then scaled for bit depth, `pel` and level. Higher favours smooth, spatially consistent fields; `0` disables the penalty and takes the pure lowest-SAD match per block. |
 | chroma | bint | (True) | Include chroma planes in the SAD/SATD metric. |
 | delta | int | (1) | Temporal distance **and direction** of the reference frame. **Positive = backward (past), negative = forward (future).** |
-| lsad | int | (400) | SAD "knee" that throttles `mvlambda` per block (see [below](#motion-coherence-tuning-mvlambda-lsad-plevel)): the penalty is relaxed on blocks that already match poorly and kept at full strength where the match is good. Has **no effect when `mvlambda=0`**. |
+| lsad | int | (400) | SAD "knee" that throttles `mvlambda` per block (see [below](#motion-coherence-tuning-mvlambda-lsad-plevel)): the penalty is relaxed on blocks that already match poorly and kept at full strength where the match is good. Given per 8×8 block (scaled by `blksizeh·blksizev/64`), like `mvlambda`. Has **no effect when `mvlambda=0`**. |
 | plevel | int | 0–2 (1) | How `mvlambda` scales across pyramid levels: 0 = constant, 1 = linear with scale, 2 = quadratic. Higher = more smoothing at the coarse levels. |
 | globalmv | bint | (True) | Estimate a global (pan) motion vector and try it as an extra predictor for every block. |
 | pnew | int | (25) | Extra penalty (relative to 256) added to the SAD of a freshly searched vector before it may replace the predictor. Higher = stickier to the predicted vector. |
 | pzero | int | (pnew) | As `pnew`, but for accepting the zero vector. |
 | pglobal | int | (0) | Penalty for the global-motion predictor. |
-| badsad | int | (10000) | SAD above which a block gets a second, wider search. |
+| badsad | int | (10000) | SAD above which a block gets a second, wider search. Given per 8×8 block (scaled by `blksizeh·blksizev/64`). |
 | badrange | int | (24) | Radius of that wider search. |
 | meander | bint | (True) | Scan block rows alternately left-to-right / right-to-left for better predictor reuse. |
 | trymany | bint | (False) | Try multiple predictors at coarse levels too (slower, occasionally better). |
@@ -195,8 +195,10 @@ photometric match. The three parameters shape that trade-off:
   "true motion" fields — what `Flow*` interpolation wants — while `mvlambda=0` ignores coherence and
   returns the lowest-SAD vector for every block, giving the smallest residual but a noisier field
   (often preferable for `Degrain`). It is the master switch: the other two only matter when it is
-  non-zero. It is rescaled internally for bit depth, `pel` and pyramid level so a given value behaves
-  the same across formats.
+  non-zero. `mvlambda` is given in units of an 8×8 block — it is multiplied internally by
+  `blksizeh·blksizev/64` so a value tuned at one block size carries over to another (the same
+  normalisation `lsad` and `badsad` use) — and is also rescaled for bit depth, `pel` and pyramid
+  level so a given value behaves the same across formats.
 
 * **`lsad`** makes the penalty *adaptive to local match quality*. Per block the effective `mvlambda`
   is multiplied by roughly `(lsad / (lsad + blockSAD/2))²`, where `blockSAD` is an estimate of how
@@ -213,8 +215,8 @@ photometric match. The three parameters shape that trade-off:
 > **Porting:** `isb` is gone — direction is now the sign of `delta` (negative = forward).
 > `dct` became the boolean `satd` (`dct=0`→`satd=False`, `dct=5`→`satd=True`). `search`/`pelsearch`
 > modes lost the old 0 and 1, so subtract 2 from your old value. `lambda`→`mvlambda`,
-> `global`→`globalmv`. The `truemotion` preset was removed in favour of fixed defaults: `mvlambda` ≈
-> 1000 per 8×8 block, `lsad=400`, `plevel=1`, `globalmv=True`, `pnew=25`. These are mostly the old
+> `global`→`globalmv`. The `truemotion` preset was removed in favour of fixed defaults: `mvlambda=1000`
+> (per 8×8 block, scaled by block area), `lsad=400`, `plevel=1`, `globalmv=True`, `pnew=25`. These are mostly the old
 > `truemotion=True` values, except `lsad` (now 400, the old `truemotion=False` value — it was 1200
 > under `truemotion=True`) and `pnew` (now 25, midway between the old 50 / 0). The `search_coarse` and
 > `divide` arguments were removed.
@@ -245,7 +247,7 @@ Re-estimates an existing vector field at (typically) a finer block size, refinin
 already have instead of searching from scratch. Pair it with a halved `blksize`/`overlap`.
 
 ```py
-core.mvu.Recalculate(clip super, clip vectors[, int thsad=200, bint smooth=True, int[] blksize=<from super>, int search=2, int searchparam=2, int mvlambda=<auto>, bint chroma=True, int pnew=25, int[] overlap=<from super>, bint meander=True, bint fields=False, bint tff=False, bint satd=False, str prefix="MVUtensils"])
+core.mvu.Recalculate(clip super, clip vectors[, int thsad=200, bint smooth=True, int[] blksize=<from super>, int search=2, int searchparam=2, int mvlambda=1000, bint chroma=True, int pnew=25, int[] overlap=<from super>, bint meander=True, bint fields=False, bint tff=False, bint satd=False, str prefix="MVUtensils"])
 ```
 
 | Parameter | Type | Options (Default) | Description |

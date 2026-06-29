@@ -159,9 +159,11 @@ static void VS_CC analyseCreate(const VSMap *in, VSMap *out, [[maybe_unused]] vo
         if (err)
             d->deltaFrame = 1;
 
-        d->nLambda = vsapi->mapGetIntSaturated(in, "mvlambda", 0, &err);
+        d->nLambda = vsapi->mapGetInt(in, "mvlambda", 0, &err);
         if (err)
-            d->nLambda = (1000 * d->nBlkSizeX * d->nBlkSizeY / 64); // truemotion default, no truemotion=0
+            d->nLambda = 1000;
+
+        d->nLambda *= (d->nBlkSizeX *d->nBlkSizeY / 64);
 
         d->lsad = vsapi->mapGetIntSaturated(in, "lsad", 0, &err);
         if (err)
