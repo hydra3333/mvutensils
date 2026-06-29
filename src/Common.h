@@ -28,7 +28,7 @@ class MVUtensilsError : public std::runtime_error {
 };
 
 template<typename T, size_t U>
-constexpr int ARRAY_SIZE(const T (&)[U]) {
+[[nodiscard]] constexpr int ARRAY_SIZE(const T (&)[U]) {
     return static_cast<int>(U);
 }
 
@@ -37,7 +37,7 @@ static void VS_CC filterFree(void *instanceData, [[maybe_unused]] VSCore *core, 
     delete reinterpret_cast<T *>(instanceData);
 }
 
-constexpr int RoundUpToAlignment(int value, int alignment = MVU_MEMORY_ALIGN) {
+[[nodiscard]] constexpr int RoundUpToAlignment(int value, int alignment = MVU_MEMORY_ALIGN) {
     return ((value + alignment - 1) / alignment) * alignment;
 }
 
@@ -66,18 +66,18 @@ static inline void mvu_bitblt(void *dstp, ptrdiff_t dst_stride, const void *srcp
 }
 
 /* returns the biggest integer x such that 2^x <= i */
-static constexpr inline int ilog2(int i) noexcept {
+[[nodiscard]] static constexpr inline int ilog2(int i) noexcept {
     return std::bit_width(static_cast<unsigned>(i)) - 1;
 }
 
 template<typename T>
-static inline T *mvu_aligned_malloc(size_t size, size_t alignment) {
+[[nodiscard]] static inline T *mvu_aligned_malloc(size_t size, size_t alignment) {
 #ifdef _WIN32
     return (T *)_aligned_malloc(size, alignment);
 #else
     void *tmp = nullptr;
     if (posix_memalign(&tmp, alignment, size))
-        tmp = 0;
+        tmp = nullptr;
     return (T *)tmp;
 #endif
 }
@@ -94,7 +94,7 @@ template<typename T> using MvuAlignedPtr = std::unique_ptr<T, decltype(&mvu_alig
 
 // Owning aligned allocation (size in bytes, matching mvu_aligned_malloc); pairs with MvuAlignedPtr.
 template<typename T>
-static inline MvuAlignedPtr<T> mvu_make_aligned(size_t size) {
+[[nodiscard]] static inline MvuAlignedPtr<T> mvu_make_aligned(size_t size) {
     return { mvu_aligned_malloc<T>(size, MVU_MEMORY_ALIGN), mvu_aligned_free };
 }
 
@@ -103,7 +103,7 @@ static inline MvuAlignedPtr<T> mvu_make_aligned(size_t size) {
 // if requireField is true and tff_exists is false.
 // When tff_exists is true, _Field is ignored entirely and tff XOR-flipped by frame
 // parity is used instead.
-inline bool GetTopField(const VSFrame *propsSrc, int n, bool tff_exists, bool tff, bool requireField, const VSAPI *vsapi) {
+[[nodiscard]] inline bool GetTopField(const VSFrame *propsSrc, int n, bool tff_exists, bool tff, bool requireField, const VSAPI *vsapi) {
     int err;
     const VSMap *props = vsapi->getFramePropertiesRO(propsSrc);
     bool top_field = !!vsapi->mapGetInt(props, "_Field", 0, &err);
@@ -118,12 +118,12 @@ inline bool GetTopField(const VSFrame *propsSrc, int n, bool tff_exists, bool tf
 // Returns nPel/2 if src is top-field and ref is bottom-field,
 //        -nPel/2 if ref is top-field and src is bottom-field,
 //         0      if both fields have the same parity.
-inline int ComputeFieldShift(bool src_top_field, bool ref_top_field, int nPel) noexcept {
+[[nodiscard]] inline int ComputeFieldShift(bool src_top_field, bool ref_top_field, int nPel) noexcept {
     return (src_top_field && !ref_top_field) ? nPel / 2 : ((ref_top_field && !src_top_field) ? -(nPel / 2) : 0);
 }
 
 template <typename PixelType>
-static constexpr PixelType AveragePixels(PixelType p1, PixelType p2) noexcept {
+[[nodiscard]] static constexpr PixelType AveragePixels(PixelType p1, PixelType p2) noexcept {
     if constexpr (std::is_integral_v<PixelType>)
         return (p1 + p2 + 1) >> 1;
     else
@@ -131,7 +131,7 @@ static constexpr PixelType AveragePixels(PixelType p1, PixelType p2) noexcept {
 }
 
 template <typename PixelType>
-static constexpr PixelType AveragePixels(PixelType p1, PixelType p2, PixelType p3, PixelType p4) noexcept {
+[[nodiscard]] static constexpr PixelType AveragePixels(PixelType p1, PixelType p2, PixelType p3, PixelType p4) noexcept {
     if constexpr (std::is_integral_v<PixelType>)
         return (p1 + p2 + p3 + p4 + 2) >> 2;
     else
@@ -139,7 +139,7 @@ static constexpr PixelType AveragePixels(PixelType p1, PixelType p2, PixelType p
 }
 
 template <typename T>
-static constexpr T ClampIntToRange(T p, int maxVal) noexcept {
+[[nodiscard]] static constexpr T ClampIntToRange(T p, int maxVal) noexcept {
     if constexpr (std::is_integral_v<T>)
         return std::clamp<T>(p, 0, maxVal);
     else
@@ -147,7 +147,7 @@ static constexpr T ClampIntToRange(T p, int maxVal) noexcept {
 }
 
 template <int rShift, int roundBias, typename T>
-static constexpr T ShiftDivide(T p) noexcept {
+[[nodiscard]] static constexpr T ShiftDivide(T p) noexcept {
     if constexpr (std::is_integral_v<T>)
         return (p + roundBias) >> rShift;
     else
@@ -155,7 +155,7 @@ static constexpr T ShiftDivide(T p) noexcept {
 }
 
 template <typename PixelType>
-static constexpr int PixelMaxValue(int bitsPerSample) noexcept {
+[[nodiscard]] static constexpr int PixelMaxValue(int bitsPerSample) noexcept {
     if constexpr (std::is_integral_v<PixelType>)
         return (1 << bitsPerSample) - 1;
     else
@@ -163,7 +163,7 @@ static constexpr int PixelMaxValue(int bitsPerSample) noexcept {
 }
 
 template<typename T>
-static constexpr T SelectOnBitsPerSample(int bitsPerSample, T o8, T o16, T o32) noexcept {
+[[nodiscard]] static constexpr T SelectOnBitsPerSample(int bitsPerSample, T o8, T o16, T o32) noexcept {
     if (bitsPerSample == 8)
         return o8;
     else if (bitsPerSample == 32)

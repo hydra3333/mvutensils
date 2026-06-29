@@ -298,23 +298,23 @@ public:
         SearchType searchType, int nSearchParam, int64_t nLambda, int pnew,
         int fieldShift, int64_t thSAD, bool useSatd, bool smooth, bool meander);
 
-    bool IsUsable(int64_t thscd1, int thscd2) const noexcept;
-    BlockData GetBlock(int nBlk) const noexcept;
-    double GetThSCDScaleFactor(int bitsPerSample) const;
+    [[nodiscard]] bool IsUsable(int64_t thscd1, int thscd2) const noexcept;
+    [[nodiscard]] BlockData GetBlock(int nBlk) const noexcept;
+    [[nodiscard]] double GetThSCDScaleFactor(int bitsPerSample) const;
     void ScaleThSCD(int64_t &thscd1, int &thscd2, int bitsPerSample) const;
-    State GetState() const noexcept;
-    bool HasMotionVectors() const noexcept;
+    [[nodiscard]] State GetState() const noexcept;
+    [[nodiscard]] bool HasMotionVectors() const noexcept;
 
-    bool IsCompatible(const MotionBlockPyramid &other) const noexcept;
-    bool IsCompatibleForAnalysis(const FramePyramid &other) const noexcept;
-    bool IsCompatibleForRecalc(const FramePyramid &other) const noexcept;
+    [[nodiscard]] bool IsCompatible(const MotionBlockPyramid &other) const noexcept;
+    [[nodiscard]] bool IsCompatibleForAnalysis(const FramePyramid &other) const noexcept;
+    [[nodiscard]] bool IsCompatibleForRecalc(const FramePyramid &other) const noexcept;
 
     template<typename PixelType>
-    std::unique_ptr<BlockMask<PixelType>> MakeVectorLengthMask(float normFactor, float fGamma) const noexcept;
+    [[nodiscard]] std::unique_ptr<BlockMask<PixelType>> MakeVectorLengthMask(float normFactor, float fGamma) const noexcept;
     template<typename PixelType>
-    std::unique_ptr<BlockMask<PixelType>> MakeSADMask(float dSADNormFactor, float fGamma, int time256) const noexcept;
+    [[nodiscard]] std::unique_ptr<BlockMask<PixelType>> MakeSADMask(float dSADNormFactor, float fGamma, int time256) const noexcept;
     template<typename PixelType>
-    std::unique_ptr<BlockMask<PixelType>> MakeVectorOcclusionMask(float dMaskNormDivider, float fGamma, int time256, bool force8bitRange) const noexcept;
+    [[nodiscard]] std::unique_ptr<BlockMask<PixelType>> MakeVectorOcclusionMask(float dMaskNormDivider, float fGamma, int time256, bool force8bitRange) const noexcept;
 
-    std::unique_ptr<SmallVectorMasks> MakeSmallVectorMasks(int fieldOffset = 0) const noexcept;
+    [[nodiscard]] std::unique_ptr<SmallVectorMasks> MakeSmallVectorMasks(int fieldOffset = 0) const noexcept;
 };
