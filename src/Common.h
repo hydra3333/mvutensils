@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <cstring>
 #include <algorithm>
+#include <bit>
 #ifdef _WIN32
 #include <malloc.h>
 #else 
@@ -63,14 +64,9 @@ static inline void mvu_bitblt(void *dstp, ptrdiff_t dst_stride, const void *srcp
     }
 }
 
-/* returns the biggest integer x such as 2^x <= i */
-static constexpr inline int ilog2(int i) {
-    int result = 0;
-    while (i > 1) {
-        i /= 2;
-        result++;
-    }
-    return result;
+/* returns the biggest integer x such that 2^x <= i */
+static constexpr inline int ilog2(int i) noexcept {
+    return std::bit_width(static_cast<unsigned>(i)) - 1;
 }
 
 template<typename T>

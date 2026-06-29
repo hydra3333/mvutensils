@@ -1,6 +1,6 @@
-#define _USE_MATH_DEFINES
 #include <cmath>
 #include <cstring>
+#include <numbers>
 #include <string>
 
 #include <VapourSynth4.h>
@@ -9,7 +9,7 @@
 
 
 void transform2motion(const transform *tr, bool forward, float xcenter, float ycenter, float pixaspect, float *dx, float *dy, float *rot, float *zoom) {
-    constexpr float PI = static_cast<float>(M_PI);
+    constexpr float PI = std::numbers::pi_v<float>;
 
     float rotradian = -atanf(pixaspect * tr->dxy / tr->dxx);
     *rot = rotradian * 180 / PI;
@@ -77,7 +77,7 @@ void inversetransform(const transform *ta, transform *tinv) noexcept {
 //  if no rotation and zoom, then also dxx, dyy = 1.
 //
 void motion2transform(float dx1, float dy1, float rot, float zoom1, float pixaspect, float xcenter, float ycenter, bool forward, float fractoffset, transform *tr) {
-    const float PI = 3.1415926535897932384626433832795f;
+    const float PI = std::numbers::pi_v<float>;
 
     // fractoffset > 0 for forward, <0 for backward
     float dx = fractoffset * dx1;

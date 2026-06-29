@@ -16,11 +16,11 @@
 // Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA, or visit
 // http://www.gnu.org/copyleft/gpl.html .
 
-#define _USE_MATH_DEFINES
 #include <cmath>
 #include <cstdlib>
 #include <stdexcept>
 #include <algorithm>
+#include <numbers>
 #include <unordered_map>
 
 #include "CPU.h"
@@ -38,7 +38,7 @@ void OverlapWindows::Init(int nx, int ny, int ox, int oy) {
     fWin1UVxfirst.resize(nx);
     fWin1UVxlast.resize(nx);
     for (int i = 0; i < ox; i++) {
-        fWin1UVx[i] = cosf(static_cast<float>(M_PI) * (i - ox + 0.5f) / (ox * 2));
+        fWin1UVx[i] = cosf(std::numbers::pi_v<float> * (i - ox + 0.5f) / (ox * 2));
         fWin1UVx[i] = fWin1UVx[i] * fWin1UVx[i];  // left window (rised cosine)
         fWin1UVxfirst[i] = 1;                                 // very first window
         fWin1UVxlast[i] = fWin1UVx[i];                  // very last
@@ -49,7 +49,7 @@ void OverlapWindows::Init(int nx, int ny, int ox, int oy) {
         fWin1UVxlast[i] = 1;  // very last
     }
     for (int i = nx - ox; i < nx; i++) {
-        fWin1UVx[i] = cosf(static_cast<float>(M_PI) * (i - nx + ox + 0.5f) / (ox * 2));
+        fWin1UVx[i] = cosf(std::numbers::pi_v<float> * (i - nx + ox + 0.5f) / (ox * 2));
         fWin1UVx[i] = fWin1UVx[i] * fWin1UVx[i];  // right window (falled cosine)
         fWin1UVxfirst[i] = fWin1UVx[i];                 // very first window
         fWin1UVxlast[i] = 1;                                  // very last
@@ -59,7 +59,7 @@ void OverlapWindows::Init(int nx, int ny, int ox, int oy) {
     fWin1UVyfirst.resize(ny);
     fWin1UVylast.resize(ny);
     for (int i = 0; i < oy; i++) {
-        fWin1UVy[i] = cosf(static_cast<float>(M_PI) * (i - oy + 0.5f) / (oy * 2));
+        fWin1UVy[i] = cosf(std::numbers::pi_v<float> * (i - oy + 0.5f) / (oy * 2));
         fWin1UVy[i] = fWin1UVy[i] * fWin1UVy[i];  // left window (rised cosine)
         fWin1UVyfirst[i] = 1;                                 // very first window
         fWin1UVylast[i] = fWin1UVy[i];                  // very last
@@ -70,7 +70,7 @@ void OverlapWindows::Init(int nx, int ny, int ox, int oy) {
         fWin1UVylast[i] = 1;  // very last
     }
     for (int i = ny - oy; i < ny; i++) {
-        fWin1UVy[i] = cosf(static_cast<float>(M_PI) * (i - ny + oy + 0.5f) / (oy * 2));
+        fWin1UVy[i] = cosf(std::numbers::pi_v<float> * (i - ny + oy + 0.5f) / (oy * 2));
         fWin1UVy[i] = fWin1UVy[i] * fWin1UVy[i];  // right window (falled cosine)
         fWin1UVyfirst[i] = fWin1UVy[i];                 // very first window
         fWin1UVylast[i] = 1;                                  // very last

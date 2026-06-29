@@ -16,7 +16,7 @@ static constexpr int kLevel0GatherGuardLines = 1;
 // Reads an "h" / "h,v" list argument. Only the per-element getter differs by T; an if-constexpr lambda
 // picks it (mapGetInt for int64_t, mapGetFloatSaturated for float, mapGetIntSaturated for int).
 template <typename T>
-void GetHVPairArgument(T &h, T &v, const char *name, TypeIdentity_t<T> defaultH, TypeIdentity_t<T> defaultV, const VSMap *in, const VSAPI *vsapi) {
+void GetHVPairArgument(T &h, T &v, const char *name, std::type_identity_t<T> defaultH, std::type_identity_t<T> defaultV, const VSMap *in, const VSAPI *vsapi) {
     static_assert(std::is_same_v<T, int> || std::is_same_v<T, int64_t> || std::is_same_v<T, float>,
                   "GetHVPairArgument supports int, int64_t and float");
     int err;

@@ -373,12 +373,12 @@ static int Median(int a, int b, int c) {
 }
 
 
-inline static int satz(int a) {
-    return ~(a >> (sizeof(int) * 8 - 1)) & a;
+static constexpr int satz(int a) noexcept {
+    return std::max(a, 0); // saturate-to-zero; std::max wrapper
 }
 
-inline static int iexp2(int i) {
-    return 1 << satz(i);
+static constexpr int iexp2(int i) noexcept {
+    return 1 << satz(i); // 2^max(i,0); no std equivalent for integer base-2 exponentiation
 }
 
 void MotionBlockLevel::Initialize(int _nBlkX, int _nBlkY, int _nBlkSizeX, int _nBlkSizeY, int nPel_, int _nLevel, bool smallestPlane_, bool chroma_, int _nOverlapX, int _nOverlapY, int _xRatioUV, int _yRatioUV, int bitsPerSample) noexcept {

@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <numbers>
 #include <optional>
 #include <string>
 #include <vector>
@@ -1209,7 +1210,7 @@ static void VS_CC depanStabiliseCreate(const VSMap *in, VSMap *out, [[maybe_unus
     d->radius = d->wintsize;
     d->wint.resize(d->wintsize + 1);
 
-    float PI = 3.14159265258f;
+    constexpr float PI = std::numbers::pi_v<float>;
     for (int i = 0; i < d->wintsize; i++)
         d->wint[i] = cosf(i * 0.5f * PI / d->wintsize);
     d->wint[d->wintsize] = 0;

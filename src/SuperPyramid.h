@@ -6,22 +6,18 @@
 #include <string>
 #include <cassert>
 #include <stdexcept>
+#include <type_traits>
 #include <VapourSynth4.h>
 
 class SuperPyramidError : public std::runtime_error {
     using std::runtime_error::runtime_error;
 };
 
-// C++17 stand-in for std::type_identity (C++20): forces a non-deduced context so the integer/float literal
-// defaults at call sites (e.g. 400 for an int64_t pair) convert to T instead of conflicting with T deduced
-// from h/v.
-template <typename T> struct TypeIdentity { using type = T; };
-template <typename T> using TypeIdentity_t = typename TypeIdentity<T>::type;
 
 // Reads an "h" or "h,v" list argument (T = int, int64_t or float): absent -> (defaultH, defaultV); a single
 // value -> v = h; more than two values throws. Definition + instantiations live in SuperPyramid.cpp.
 template <typename T>
-void GetHVPairArgument(T &h, T &v, const char *name, TypeIdentity_t<T> defaultH, TypeIdentity_t<T> defaultV, const VSMap *in, const VSAPI *vsapi);
+void GetHVPairArgument(T &h, T &v, const char *name, std::type_identity_t<T> defaultH, std::type_identity_t<T> defaultV, const VSMap *in, const VSAPI *vsapi);
 void CheckBlkSize(int nBlkSizeX, int nBlkSizeY, int nOverlapX, int nOverlapY, int subSamplingW, int subSamplingH, bool useSatd = false);
 
 enum class SharpParam {
