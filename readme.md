@@ -46,6 +46,7 @@ MVUtensils is API-compatible in spirit but not verbatim. The main differences:
 | `Flow(mode=...)`, `BlockFPS`, `Finest`, `search_coarse`, `divide`, `scbehavior`, `truemotion` | removed |
 | `FlowFPS(mask=1/2)` | `FlowFPS(extramask=False/True)` |
 | `Mask(kind=0/1/2)` | `VectorLengthMask` / `SADMask` / `OcclusionMask` |
+| `thscd2` (0–256 int, default 130) | `thscd2` (0–100 float percentage, default 51) |
 
 A typical denoise, before and after:
 
@@ -118,6 +119,10 @@ and omitted from the per-function tables below.
 | thscd1 | int | (400) | Scene-change SAD threshold. A block whose SAD exceeds this is considered "changed". The value is defined for an 8×8 luma block at 8-bit and is scaled internally to the actual block size, chroma usage and bit depth. |
 | thscd2 | float | 0–100 (51) | Percentage of blocks that must be "changed" (SAD above `thscd1`) for the whole frame to be treated as a scene change. 0 = any single changed block triggers it; 100 = never. On a scene change the consumer leaves the frame unprocessed (passes the source through). |
 | prefix | str | ("MVUtensils") | Prefix of the frame properties read/written by this function. Must match between the producer and consumer of a vector/super clip. |
+
+> **Porting:** `thscd2` is now a 0–100 float **percentage** of changed blocks instead of the old
+> 0–256 integer count. The default went from `130` (≈51% of 256) to the equivalent `51`; multiply
+> an old value by `100/256` to convert.
 
 ## Super
 
@@ -284,7 +289,7 @@ from `radius` previous and `radius` following frames, weighted by how well they 
 variants that take the same arguments.
 
 ```py
-core.mvu.Degrain(clip clip, clip super, clip[] vectors[, int[] thsad=[400, 400], int[] planes=[0, 1, 2], float[] limit=[inf, inf], int thscd1=400, int thscd2=130, str prefix="MVUtensils"])
+core.mvu.Degrain(clip clip, clip super, clip[] vectors[, int[] thsad=[400, 400], int[] planes=[0, 1, 2], float[] limit=[inf, inf], int thscd1=400, float thscd2=51, str prefix="MVUtensils"])
 ```
 
 | Parameter | Type | Options (Default) | Description |
@@ -313,7 +318,7 @@ Builds a single motion-compensated frame: each block is copied from the referenc
 motion vector.
 
 ```py
-core.mvu.Compensate(clip clip, clip super, clip vectors[, int thsad=10000, bint fields=False, float time=100.0, int thscd1=400, int thscd2=130, bint tff=False, str prefix="MVUtensils"])
+core.mvu.Compensate(clip clip, clip super, clip vectors[, int thsad=10000, bint fields=False, float time=100.0, int thscd1=400, float thscd2=51, bint tff=False, str prefix="MVUtensils"])
 ```
 
 | Parameter | Type | Options (Default) | Description |
@@ -334,7 +339,7 @@ Pixel-accurate motion compensation: instead of copying whole blocks it warps the
 using a per-pixel vector field interpolated from the block vectors.
 
 ```py
-core.mvu.Flow(clip clip, clip super, clip vectors[, float time=100.0, bint fields=False, int thscd1=400, int thscd2=130, bint tff=False, str prefix="MVUtensils"])
+core.mvu.Flow(clip clip, clip super, clip vectors[, float time=100.0, bint fields=False, int thscd1=400, float thscd2=51, bint tff=False, str prefix="MVUtensils"])
 ```
 
 | Parameter | Type | Options (Default) | Description |
@@ -354,7 +359,7 @@ Interpolates a new frame *between* two existing frames by warping both halves of
 toward the requested time.
 
 ```py
-core.mvu.FlowInter(clip clip, clip super, clip[] vectors[, float time=50.0, float ml=100.0, bint blend=True, int thscd1=400, int thscd2=130, str prefix="MVUtensils"])
+core.mvu.FlowInter(clip clip, clip super, clip[] vectors[, float time=50.0, float ml=100.0, bint blend=True, int thscd1=400, float thscd2=51, str prefix="MVUtensils"])
 ```
 
 | Parameter | Type | Options (Default) | Description |
@@ -373,7 +378,7 @@ core.mvu.FlowInter(clip clip, clip super, clip[] vectors[, float time=50.0, floa
 Motion-compensated frame-rate conversion, building each output frame with `FlowInter`-style warping.
 
 ```py
-core.mvu.FlowFPS(clip clip, clip super, clip[] vectors[, int num=25, int den=1, bint extramask=True, float ml=100.0, bint blend=True, int thscd1=400, int thscd2=130, str prefix="MVUtensils"])
+core.mvu.FlowFPS(clip clip, clip super, clip[] vectors[, int num=25, int den=1, bint extramask=True, float ml=100.0, bint blend=True, int thscd1=400, float thscd2=51, str prefix="MVUtensils"])
 ```
 
 | Parameter | Type | Options (Default) | Description |
@@ -395,7 +400,7 @@ core.mvu.FlowFPS(clip clip, clip super, clip[] vectors[, int num=25, int den=1, 
 Creates motion blur by smearing each pixel along its motion vector.
 
 ```py
-core.mvu.FlowBlur(clip clip, clip super, clip[] vectors[, float blur=50.0, int prec=1, int thscd1=400, int thscd2=130, str prefix="MVUtensils"])
+core.mvu.FlowBlur(clip clip, clip super, clip[] vectors[, float blur=50.0, int prec=1, int thscd1=400, float thscd2=51, str prefix="MVUtensils"])
 ```
 
 | Parameter | Type | Options (Default) | Description |
@@ -419,7 +424,7 @@ are clamped to 0–1).
 * **OcclusionMask** — brightness proportional to occlusion / divergence of the field (old `kind=2`).
 
 ```py
-core.mvu.VectorLengthMask(clip vectors[, float ml=100.0, float gamma=1.0, float time=100.0, float scval=0.0, int thscd1=400, int thscd2=130, str prefix="MVUtensils"])
+core.mvu.VectorLengthMask(clip vectors[, float ml=100.0, float gamma=1.0, float time=100.0, float scval=0.0, int thscd1=400, float thscd2=51, str prefix="MVUtensils"])
 core.mvu.SADMask(clip vectors[, ...same...])
 core.mvu.OcclusionMask(clip vectors[, ...same...])
 ```
@@ -442,7 +447,7 @@ Marks scene-change frames (using the vector clip's SAD statistics) by setting th
 `_SceneChangePrev`/`_SceneChangeNext` frame properties.
 
 ```py
-core.mvu.SCDetection(clip clip, clip vectors[, int thscd1=400, int thscd2=130, str prefix="MVUtensils"])
+core.mvu.SCDetection(clip clip, clip vectors[, int thscd1=400, float thscd2=51, str prefix="MVUtensils"])
 ```
 
 | Parameter | Type | Options (Default) | Description |
@@ -507,7 +512,7 @@ Fits a single global transform (pan, optional zoom and rotation) to the per-bloc
 an MVUtensils `vectors` clip, producing the same kind of *data* clip as `DepanEstimate`.
 
 ```py
-core.mvu.DepanAnalyse(clip clip, clip vectors[, clip mask=None, bint zoom=True, bint rot=True, float pixaspect=1.0, float error=15.0, bint info=False, float wrong=10.0, float zerow=0.05, int thscd1=400, int thscd2=130, bint fields=False, bint tff=False])
+core.mvu.DepanAnalyse(clip clip, clip vectors[, clip mask=None, bint zoom=True, bint rot=True, float pixaspect=1.0, float error=15.0, bint info=False, float wrong=10.0, float zerow=0.05, int thscd1=400, float thscd2=51, bint fields=False, bint tff=False])
 ```
 
 | Parameter | Type | Options (Default) | Description |
