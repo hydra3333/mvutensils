@@ -159,29 +159,25 @@ static void VS_CC analyseCreate(const VSMap *in, VSMap *out, [[maybe_unused]] vo
         if (err)
             d->deltaFrame = 1;
 
-        bool truemotion = !!vsapi->mapGetInt(in, "truemotion", 0, &err);
-        if (err)
-            truemotion = true;
-
         d->nLambda = vsapi->mapGetIntSaturated(in, "mvlambda", 0, &err);
         if (err)
-            d->nLambda = truemotion ? (1000 * d->nBlkSizeX * d->nBlkSizeY / 64) : 0;
+            d->nLambda = (1000 * d->nBlkSizeX * d->nBlkSizeY / 64); // truemotion default, no truemotion=0
 
         d->lsad = vsapi->mapGetIntSaturated(in, "lsad", 0, &err);
         if (err)
-            d->lsad = truemotion ? 1200 : 400;
+            d->lsad = 400; // truemotion was 1200 here
 
         d->plevel = vsapi->mapGetIntSaturated(in, "plevel", 0, &err);
         if (err)
-            d->plevel = truemotion ? 1 : 0;
+            d->plevel = 1;
 
         d->global = !!vsapi->mapGetInt(in, "globalmv", 0, &err);
         if (err)
-            d->global = truemotion;
+            d->global = true;
 
         d->pnew = vsapi->mapGetIntSaturated(in, "pnew", 0, &err);
         if (err)
-            d->pnew = truemotion ? 50 : 0; // relative to 256
+            d->pnew = 25;
 
         d->pzero = vsapi->mapGetIntSaturated(in, "pzero", 0, &err);
         if (err)
@@ -316,7 +312,6 @@ void analyseRegister(VSPlugin *plugin, const VSPLUGINAPI *vspapi) noexcept {
                  "mvlambda:int:opt;"
                  "chroma:int:opt;"
                  "delta:int:opt;"
-                 "truemotion:int:opt;"
                  "lsad:int:opt;"
                  "plevel:int:opt;"
                  "globalmv:int:opt;"
@@ -344,7 +339,6 @@ void analyseRegister(VSPlugin *plugin, const VSPLUGINAPI *vspapi) noexcept {
                  "mvlambda:int:opt;"
                  "chroma:int:opt;"
                  "delta:int:opt;"
-                 "truemotion:int:opt;"
                  "lsad:int:opt;"
                  "plevel:int:opt;"
                  "globalmv:int:opt;"

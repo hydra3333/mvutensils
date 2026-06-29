@@ -143,17 +143,13 @@ static void VS_CC recalculateCreate(const VSMap *in, VSMap *out, [[maybe_unused]
         if (d->vi->format.colorFamily == cfGray)
             d->chroma = false;
 
-        bool truemotion = !!vsapi->mapGetInt(in, "truemotion", 0, &err);
-        if (err)
-            truemotion = true;
-
         d->nLambda = vsapi->mapGetIntSaturated(in, "mvlambda", 0, &err);
         if (err)
-            d->nLambda = truemotion ? (1000 * d->nBlkSizeX * d->nBlkSizeY / 64) : 0;
+            d->nLambda = (1000 * d->nBlkSizeX * d->nBlkSizeY / 64); // truemotion default, no truemotion=0
 
         d->pnew = vsapi->mapGetIntSaturated(in, "pnew", 0, &err);
         if (err)
-            d->pnew = truemotion ? 50 : 0; // relative to 256
+            d->pnew = 25;
 
         d->meander = !!vsapi->mapGetInt(in, "meander", 0, &err);
         if (err)
@@ -220,7 +216,6 @@ void recalculateRegister(VSPlugin *plugin, const VSPLUGINAPI *vspapi) noexcept {
                  "searchparam:int:opt;"
                  "mvlambda:int:opt;"
                  "chroma:int:opt;"
-                 "truemotion:int:opt;"
                  "pnew:int:opt;"
                  "overlap:int[]:opt;"
                  "meander:int:opt;"
