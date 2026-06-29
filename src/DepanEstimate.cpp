@@ -694,6 +694,8 @@ static void VS_CC depanEstimateCreate(const VSMap *in, VSMap *out, [[maybe_unuse
 
         if (data1->winx > data1->vi->width - data1->wleft)
             throw std::runtime_error("winx must not be greater than width-wleft");
+        if (data1->winx < 0 || (data1->winx & 1)) // odd winx overreads the source by one column in frame_data2d's i+=2 loop
+            throw std::runtime_error("winx must be a non-negative even number");
         if (data1->winx == 0) { // auto
             data1->winx = data1->vi->width - data1->wleft;
             // find max fft window size (power of 2)

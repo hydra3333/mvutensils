@@ -925,7 +925,7 @@ void MotionBlockLevel::PseudoEPZSearch(int blkIdx, int blkx, int blky, int blkSc
 
 template <int nLogPel, typename PixelType>
 void MotionBlockLevel::DoSearchMVs(const FramePyramidLevel &pSrcFrame, const FramePyramidLevel &pRefFrame,
-    SearchType st, int stp, int lambda, int64_t lsad, int pnew,
+    SearchType st, int stp, int64_t lambda, int64_t lsad, int pnew,
     int plevel, VECTOR *globalMVec, int fieldShift,
     int pzero, int pglobal, int64_t badSAD, int badrange, bool meander, bool tryMany, bool chroma) noexcept {
 
@@ -1040,7 +1040,7 @@ void MotionBlockLevel::DoSearchMVs(const FramePyramidLevel &pSrcFrame, const Fra
 
 
 void MotionBlockLevel::SearchMVs(const FramePyramidLevel &pSrcFrame, const FramePyramidLevel &pRefFrame,
-    SearchType st, int stp, int lambda, int64_t lsad, int pnew,
+    SearchType st, int stp, int64_t lambda, int64_t lsad, int pnew,
     int plevel, VECTOR *globalMVec, int fieldShift, bool useSatd,
     int pzero, int pglobal, int64_t badSAD, int badrange, bool meander, bool tryMany, bool chroma, int bytesPerSample) {
 
@@ -1074,7 +1074,7 @@ void MotionBlockLevel::SearchMVs(const FramePyramidLevel &pSrcFrame, const Frame
 template <int nLogPel, typename PixelType>
 void MotionBlockLevel::DoRecalculateMVs(const FramePyramidLevel &pSrcFrame, const FramePyramidLevel &pRefFrame,
     int nBlkSizeX_, int nBlkSizeY_, int nOverlapX_, int nOverlapY_, bool chroma_,
-    SearchType st, int stp, int lambda, int pnew,
+    SearchType st, int stp, int64_t lambda, int pnew,
     int fieldShift, int64_t thSAD, bool smooth, bool meander, bool useSatd) {
                                     
     zeroMVfieldShifted.x = 0;
@@ -1337,7 +1337,7 @@ void MotionBlockLevel::DoRecalculateMVs(const FramePyramidLevel &pSrcFrame, cons
 
 void MotionBlockLevel::RecalculateMVs(const FramePyramidLevel &pSrcFrame, const FramePyramidLevel &pRefFrame,
     int nBlkSizeX, int nBlkSizeY, int nOverlapX, int nOverlapY, bool chroma,
-    SearchType st, int stp, int lambda, int pnew,
+    SearchType st, int stp, int64_t lambda, int pnew,
     int fieldShift, int64_t thSAD, bool useSatd, bool smooth, bool meander, int bytesPerSample) {
 
     if (bytesPerSample == 1) {
@@ -1570,7 +1570,7 @@ MotionBlockPyramid::~MotionBlockPyramid() {
 }
 
 void MotionBlockPyramid::SearchMVs(const FramePyramid &pSrcGOF, const FramePyramid &pRefGOF,
-    SearchType searchType, int nSearchParam, int nPelSearch, int nLambda,
+    SearchType searchType, int nSearchParam, int nPelSearch, int64_t nLambda,
     int64_t lsad, int pnew, int plevel, bool global, int fieldShift, bool useSatd,
     int pzero, int pglobal, int64_t badSAD, int badrange, bool meander, bool tryMany,
     bool chroma) {
@@ -1626,7 +1626,7 @@ void MotionBlockPyramid::SearchMVs(const FramePyramid &pSrcGOF, const FramePyram
 
 void MotionBlockPyramid::RecalculateMVs(const FramePyramid &pSrcGOF, const FramePyramid &pRefGOF,
     int nBlkSizeX, int nBlkSizeY, int nOverlapX, int nOverlapY, bool chroma,
-    SearchType searchType, int nSearchParam, int nLambda, int pnew,
+    SearchType searchType, int nSearchParam, int64_t nLambda, int pnew,
     int fieldShift, int64_t thSAD, bool useSatd, bool smooth, bool meander) {
 
     if (state != State::ReadyForRecalculate)

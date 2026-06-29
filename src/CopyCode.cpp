@@ -11,7 +11,7 @@ void copyBlock(uint8_t * __restrict pDst, ptrdiff_t nDstPitch, const uint8_t * _
 }
 
 
-#define KEY(width, height, bits) (width) << 16 | (height) << 8 | (bits)
+#define KEY(width, height, bits) ((width) << 16 | (height) << 8 | (bits))
 #define COPY(width, height) \
     { KEY(width, height, 8), copyBlock<width * sizeof(uint8_t), height> }, \
     { KEY(width, height, 16), copyBlock<width * sizeof(uint16_t), height> }, \

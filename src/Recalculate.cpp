@@ -13,7 +13,7 @@ struct RecalculateData {
 
     int deltaFrame;
 
-    int nLambda;
+    int64_t nLambda;
 
     int nBlkSizeX;
     int nBlkSizeY;
@@ -177,7 +177,7 @@ static void VS_CC recalculateCreate(const VSMap *in, VSMap *out, [[maybe_unused]
 
         int pixelMax = (1 << std::min(16, d->vi->format.bitsPerSample)) - 1; // float SAD uses the 16-bit scale
         d->thSAD = (int64_t)((double)d->thSAD * pixelMax / 255.0 + 0.5);
-        d->nLambda = (int)((double)d->nLambda * pixelMax / 255.0 + 0.5);
+        d->nLambda = (int64_t)((double)d->nLambda * pixelMax / 255.0 + 0.5);
 
         // Normalize threshold to old block size
         const int referenceBlockSize = 8 * 8;

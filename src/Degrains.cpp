@@ -152,7 +152,10 @@ static const VSFrame *VS_CC degrainGetFrame(int n, int activationReason, void *i
 
                 if (isUsable[r]) {
                     int offset = fgops[r]->nDeltaFrame;
-                    pRefGOF[r].emplace(vsapi->getFrameFilter(n + offset, d->super, frameCtx), 1, d->prefix, vsapi);
+                    if (n + offset >= 0 && n + offset < d->vi->numFrames)
+                        pRefGOF[r].emplace(vsapi->getFrameFilter(n + offset, d->super, frameCtx), 1, d->prefix, vsapi);
+                    else
+                        isUsable[r] = false; // reference out of range was never requested at arInitial; treat as unusable
                 }
             }
 
@@ -552,9 +555,10 @@ static void VS_CC degrainCreate(const VSMap *in, VSMap *out, [[maybe_unused]] vo
                     throw std::runtime_error("limit must be non-negative");
                 if (d->vi->format.sampleType == stInteger) {
                     int pixelMax = (1 << d->vi->format.bitsPerSample) - 1;
-                    d->nLimit[i] = static_cast<int>(d->fLimit[i] + 0.5f);
-                    if (d->nLimit[i] >= pixelMax)
+                    if (d->fLimit[i] >= (float)pixelMax)
                         d->needsLimit[i] = false;
+                    else
+                        d->nLimit[i] = static_cast<int>(d->fLimit[i] + 0.5f);
                 }
             }
         }

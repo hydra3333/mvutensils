@@ -264,7 +264,7 @@ unsigned int sad_c(const uint8_t *pSrc8, intptr_t nSrcPitch, const uint8_t *pRef
 }
 
 
-#define KEY(width, height, bits) (unsigned)(width) << 24 | (height) << 16 | (bits) << 8
+#define KEY(width, height, bits) ((unsigned)(width) << 24 | (height) << 16 | (bits) << 8)
 
 // SSE2 is baseline on x86-64 and an intrinsic wrapper exists for every block size, so on x86 the
 // SSE2 kernel takes the scalar version's place directly in the map (no instruction-set key, no

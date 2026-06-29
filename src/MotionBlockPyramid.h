@@ -191,12 +191,12 @@ private:
     template <int nLogPel, typename PixelType>
     void DoRecalculateMVs(const FramePyramidLevel &pSrcFrame, const FramePyramidLevel &pRefFrame,
         int nBlkSizeX, int nBlkSizeY, int nOverlapX, int nOverlapY, bool chroma,
-        SearchType st, int stp, int lambda, int pnew,
+        SearchType st, int stp, int64_t lambda, int pnew,
         int fieldShift, int64_t thSAD, bool smooth, bool meander, bool useSatd);
 
     template <int nLogPel, typename PixelType>
     void DoSearchMVs(const FramePyramidLevel &pSrcFrame, const FramePyramidLevel &pRefFrame,
-        SearchType st, int stp, int lambda, int64_t lsad, int pnew,
+        SearchType st, int stp, int64_t lambda, int64_t lsad, int pnew,
         int plevel, VECTOR *globalMVec, int fieldShift,
         int pzero, int pglobal, int64_t badSAD, int badrange, bool meander, bool tryMany, bool chroma) noexcept;
 
@@ -208,13 +208,13 @@ private:
     void EstimateGlobalMVDoubledFallback(VECTOR &globalMVec) const noexcept;
 public:
     void SearchMVs(const FramePyramidLevel &pSrcFrame, const FramePyramidLevel &pRefFrame,
-        SearchType st, int stp, int lambda, int64_t lsad, int pnew,
+        SearchType st, int stp, int64_t lambda, int64_t lsad, int pnew,
         int plevel, VECTOR *globalMVec, int fieldShift, bool useSatd,
         int pzero, int pglobal, int64_t badSAD, int badrange, bool meander, bool tryMany, bool chroma, int bytesPerSample);
 
     void RecalculateMVs(const FramePyramidLevel &pSrcFrame, const FramePyramidLevel &pRefFrame,
         int nBlkSizeX, int nBlkSizeY, int nOverlapX, int nOverlapY, bool chroma,
-        SearchType st, int stp, int lambda, int pnew,
+        SearchType st, int stp, int64_t lambda, int pnew,
         int fieldShift, int64_t thSAD, bool useSatd, bool smooth, bool meander, int bytesPerSample);
 
     void EstimateGlobalMVDoubled(VECTOR &globalMVec) const noexcept;
@@ -286,7 +286,7 @@ public:
     void ExportFrameData(VSFrame *dst, const std::string &prefix, const VSAPI *vsapi) const noexcept; // serialization to a frame, oneLevel means that only the finest level is exported, otherwise all levels are exported as separate properties
 
     void SearchMVs(const FramePyramid &pSrcGOF, const FramePyramid &pRefGOF,
-        SearchType searchType, int nSearchParam, int nPelSearch, int nLambda,
+        SearchType searchType, int nSearchParam, int nPelSearch, int64_t nLambda,
         int64_t lsad, int pnew, int plevel, bool global, int fieldShift, bool useSatd,
         int pzero, int pglobal, int64_t badSAD, int badrange, bool meander, bool tryMany,
         bool chroma);
@@ -295,7 +295,7 @@ public:
     // this should probably be improved
     void RecalculateMVs(const FramePyramid &pSrcGOF, const FramePyramid &pRefGOF,
         int nBlkSizeX, int nBlkSizeY, int nOverlapX, int nOverlapY, bool chroma,
-        SearchType searchType, int nSearchParam, int nLambda, int pnew,
+        SearchType searchType, int nSearchParam, int64_t nLambda, int pnew,
         int fieldShift, int64_t thSAD, bool useSatd, bool smooth, bool meander);
 
     bool IsUsable(int64_t thscd1, int thscd2) const noexcept;
