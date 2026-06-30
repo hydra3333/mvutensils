@@ -289,7 +289,7 @@ from `radius` previous and `radius` following frames, weighted by how well they 
 variants that take the same arguments.
 
 ```py
-core.mvu.Degrain(clip clip, clip super, clip[] vectors[, int[] thsad=[400, 400], int[] planes=[0, 1, 2], float[] limit=[inf, inf], int thscd1=400, float thscd2=51, str prefix="MVUtensils"])
+core.mvu.Degrain(clip clip, clip super, clip[] vectors[, int[] thsad=[400, 400], int[] planes=[0, 1, 2], float[] limit=[inf, inf], int thscd1=400, float thscd2=51, int[] weights=None, str prefix="MVUtensils"])
 ```
 
 | Parameter | Type | Options (Default) | Description |
@@ -300,6 +300,7 @@ core.mvu.Degrain(clip clip, clip super, clip[] vectors[, int[] thsad=[400, 400],
 | thsad | int[] | ([400, 400]) | SAD `[luma, chroma]` at which a reference block's weight reaches zero. Higher = stronger denoising. Chroma defaults to the luma value. |
 | planes | int[] | ([0, 1, 2]) | Which planes to process; unprocessed planes are copied. |
 | limit | float[] | ([inf, inf]) | Maximum absolute change per pixel `[luma, chroma]`. Non-finite (`inf`/`nan`) or a value above the format maximum disables limiting. |
+| weights | int[] | (None) | Optional per-frame bias applied on top of the SAD-derived weights, in temporal order `[bw_radius, …, bw_1, centre, fw_1, …, fw_radius]` — exactly `2·radius + 1` non-negative values. Each reference's (and the source's) weight is multiplied by its entry before the weights are normalised, so only the ratios matter — the upper limit (≈645,000 at radius 6, higher at smaller radius) exists purely to keep the internal weight sum inside a 32-bit int and is far beyond any real use. Omitted (or all-equal) leaves the default SAD weighting unchanged. |
 
 > **Porting:** the per-direction `mvbw*/mvfw*` arguments are now the single `vectors` list, the
 > `thsad`/`thsadc` pair became `thsad=[luma, chroma]`, and `limit`/`limitc` became the float

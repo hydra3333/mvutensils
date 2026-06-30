@@ -254,17 +254,23 @@ static inline void useBlock(const uint8_t *&p, uint16_t &WRef, int isUsable, con
 }
 
 
+// userWeights biases each reference's contribution before normalisation:
+// userWeights[0] scales the source/centre weight, userWeights[r + 1] scales
+// WRefs[r]. All-ones reproduces the unweighted result exactly.
 template <int radius>
-static inline void normaliseWeights(uint16_t &WSrc, uint16_t *WRefs) noexcept {
+static inline void normaliseWeights(uint16_t &WSrc, uint16_t *WRefs, const int *userWeights) noexcept {
     int wsrc = 256;
-    int WSum = wsrc + 1;
-    for (int r = 0; r < radius * 2; r++)
-        WSum += WRefs[r];
+    int weighted[radius * 2];
+    int WSum = wsrc * userWeights[0] + 1;
+    for (int r = 0; r < radius * 2; r++) {
+        weighted[r] = WRefs[r] * userWeights[r + 1];
+        WSum += weighted[r];
+    }
 
     double scale = 256.0 / WSum;
 
     for (int r = 0; r < radius * 2; r++) {
-        int w = static_cast<int>(WRefs[r] * scale);
+        int w = static_cast<int>(weighted[r] * scale);
         WRefs[r] = static_cast<uint16_t>(w);
         wsrc -= w;
     }

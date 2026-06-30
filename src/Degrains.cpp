@@ -48,6 +48,8 @@ struct DegrainData {
     int64_t nSCD1;
     float nSCD2;
 
+    int userWeights[radius * 2 + 1];
+
     ptrdiff_t dstTempPitch;
 
     OverlapsFunction OVERS[3];
@@ -235,7 +237,7 @@ static const VSFrame *VS_CC degrainGetFrame(int n, int activationReason, void *i
                             for (int r = 0; r < radius * 2; r++)
                                 useBlock<PixelType>(pointers[r], WRefs[r], isUsable[r], fgops[r], i, pPlanes[r], pSrcCur, xx, nLogPel, plane, xSubUV, ySubUV, thSAD);
 
-                            normaliseWeights<radius>(WSrc, WRefs);
+                            normaliseWeights<radius>(WSrc, WRefs, d->userWeights);
 
                             const int dstPixX = xx / bytesPerSample;
                             const int validW = std::min(nBlkSizeX[plane], frameW - dstPixX);
@@ -289,7 +291,7 @@ static const VSFrame *VS_CC degrainGetFrame(int n, int activationReason, void *i
                             for (int r = 0; r < radius * 2; r++)
                                 useBlock<PixelType>(pointers[r], WRefs[r], isUsable[r], fgops[r], i, pPlanes[r], pSrcCur, xx, nLogPel, plane, xSubUV, ySubUV, thSAD);
 
-                            normaliseWeights<radius>(WSrc, WRefs);
+                            normaliseWeights<radius>(WSrc, WRefs, d->userWeights);
 
                             d->DEGRAIN[plane](tmpBlock, tmpBlockPitch, pSrcCur[plane] + xx, nSrcPitches[plane],
                                 pointers, nRefPitch,
@@ -492,6 +494,31 @@ static void VS_CC degrainCreate(const VSMap *in, VSMap *out, [[maybe_unused]] vo
     try {
         getProcessPlanesArg(in, d->process, vsapi);
 
+        // Optional per-reference weights, given in temporal order
+        // [bw_radius, ..., bw_1, centre, fw_1, ..., fw_radius] and reordered into
+        // userWeights to match the [centre, bw_1, fw_1, bw_2, fw_2, ...] layout
+        // normaliseWeights expects. Absent means all weights are 1 (unweighted).
+        int weightCount = vsapi->mapNumElements(in, "weights");
+        if (weightCount == -1) {
+            for (int r = 0; r <= radius * 2; r++)
+                d->userWeights[r] = 1;
+        } else if (weightCount != radius * 2 + 1) {
+            throw std::runtime_error("weights, if given, must have exactly " + std::to_string(radius * 2 + 1) + " elements");
+        } else {
+            d->userWeights[0] = vsapi->mapGetIntSaturated(in, "weights", radius, nullptr);
+            for (int r = 0; r < radius; r++) {
+                d->userWeights[r * 2 + 1] = vsapi->mapGetIntSaturated(in, "weights", radius - (r + 1), nullptr);
+                d->userWeights[r * 2 + 2] = vsapi->mapGetIntSaturated(in, "weights", radius + (r + 1), nullptr);
+            }
+            // Largest weight that keeps normaliseWeights' int WSum accumulation
+            // (256 * weight summed over 2*radius+1 terms, plus 1) within INT_MAX.
+            // Only the ratios matter, so this ceiling is far beyond any real use.
+            constexpr int maxWeight = (std::numeric_limits<int>::max() - 1) / (256 * (radius * 2 + 1));
+            for (int r = 0; r <= radius * 2; r++)
+                if (d->userWeights[r] < 0 || d->userWeights[r] > maxWeight)
+                    throw std::runtime_error("weights must be between 0 and " + std::to_string(maxWeight));
+        }
+
         d->node = vsapi->mapGetNode(in, "clip", 0, nullptr);
         d->vi = vsapi->getVideoInfo(d->node);
 
@@ -656,6 +683,7 @@ constexpr const char *degrain_args =
     "limit:float[]:opt;"
     "thscd1:int:opt;"
     "thscd2:float:opt;"
+    "weights:int[]:opt;"
     "prefix:data:opt;";
 
 void degrainsRegister(VSPlugin *plugin, const VSPLUGINAPI *vspapi) noexcept {
