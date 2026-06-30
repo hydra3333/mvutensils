@@ -39,6 +39,22 @@ void FlowFetch_avx512_u16(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane
 void FlowFetch_avx512_f32(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
     const uint16_t *VXFull, const uint16_t *VYFull, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept;
 
+// FlowBlur per-pixel tap-gather (FlowShared_AVX512.cpp): the mF+mB motion-blur taps of one output pixel
+// are dense-packed and gathered in up to four 8-wide masked vpgatherdd chunks, then horizontally summed.
+// u8/u16 only (float keeps the scalar's in-order double accumulation). Bit-exact with FlowBlur_scalar.
+void FlowBlur_avx512_u8(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
+    const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
+    ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int blur256, int prec) noexcept;
+void FlowBlur_avx512_u16(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
+    const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
+    ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int blur256, int prec) noexcept;
+// Float gather variant: tap values gathered as float32, summed in double (reordered vs the scalar walk).
+// For normal pixel ranges the double sum is order-independent-exact, so it matches FlowBlur_scalar<float>
+// bit-for-bit (measured 0 error); only extreme magnitudes could differ sub-ULP (build-variant-dependent).
+void FlowBlur_avx512_f32(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
+    const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
+    ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int blur256, int prec) noexcept;
+
 // AVX2 gather kernels (FlowShared_AVX2.cpp): 8 px/iter, same addressing/limits as the AVX-512 ones.
 void FlowInter_avx2_u8(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &prefB, const PyramidPlane &prefF,
     const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,

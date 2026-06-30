@@ -86,6 +86,29 @@ static MVU_FORCE_INLINE __m512i mc_gather(const PyramidPlane &p, __m512i nX, __m
     return _mm512_and_si512(g, _mm512_set1_epi32(S == 1 ? 0xFF : (S == 2 ? 0xFFFF : -1))); // float (S==4): keep all 32 bits
 }
 
+// 8-wide masked gather (AVX512VL) + 8-lane horizontal sum, for the FlowBlur split kernel below. Same
+// centered-base addressing/over-read contract as the 16-wide mc_gather; masked-off lanes read nothing.
+template <int S>
+static MVU_FORCE_INLINE __m256i mc_gather8(const PyramidPlane &p, __m256i nX, __m256i nY, __mmask8 k) {
+    const int logp = ilog2(p.nPel);
+    const int mid = (p.nPel * p.nPel) / 2;
+    const __m256i mask = _mm256_set1_epi32(p.nPel - 1);
+    const __m256i X = _mm256_add_epi32(nX, _mm256_set1_epi32(p.nHPaddingPel));
+    const __m256i Y = _mm256_add_epi32(nY, _mm256_set1_epi32(p.nVPaddingPel));
+    __m256i idx = _mm256_or_si256(_mm256_and_si256(X, mask), _mm256_sllv_epi32(_mm256_and_si256(Y, mask), _mm256_set1_epi32(logp)));
+    __m256i off = _mm256_mullo_epi32(_mm256_sub_epi32(idx, _mm256_set1_epi32(mid)), _mm256_set1_epi32((int)p.subPelPlaneOffset));
+    off = _mm256_add_epi32(off, _mm256_slli_epi32(_mm256_srai_epi32(X, logp), S == 4 ? 2 : (S == 2 ? 1 : 0)));
+    off = _mm256_add_epi32(off, _mm256_mullo_epi32(_mm256_srai_epi32(Y, logp), _mm256_set1_epi32((int)p.nPitch)));
+    __m256i g = _mm256_mmask_i32gather_epi32(_mm256_setzero_si256(), k, off, (const int *)p.pPlane[mid], 1);
+    return _mm256_and_si256(g, _mm256_set1_epi32(S == 1 ? 0xFF : (S == 2 ? 0xFFFF : -1)));
+}
+static MVU_FORCE_INLINE int hsum8_epi32(__m256i v) {
+    __m128i s = _mm_add_epi32(_mm256_castsi256_si128(v), _mm256_extracti128_si256(v, 1));
+    s = _mm_add_epi32(s, _mm_shuffle_epi32(s, _MM_SHUFFLE(1, 0, 3, 2)));
+    s = _mm_add_epi32(s, _mm_shuffle_epi32(s, _MM_SHUFFLE(2, 3, 0, 1)));
+    return _mm_cvtsi128_si32(s);
+}
+
 template <int S>
 static void flowinter_impl(uint8_t *MVU_RESTRICT pdst, ptrdiff_t dst_pitch,
         const PyramidPlane &prefB, const PyramidPlane &prefF,
@@ -270,6 +293,186 @@ void FlowFetch_avx512_u16(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane
 void FlowFetch_avx512_f32(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
         const uint16_t *VXFull, const uint16_t *VYFull, ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int time256) noexcept {
     flowfetch_impl<4>(pdst, dst_pitch, pref, VXFull, VYFull, tilePitch, dstX, dstY, width, height, time256);
+}
+
+// FlowBlur: motion-blur line integral. Per output pixel it takes mF forward + mB backward sub-pixel
+// taps along the (blur-scaled) motion vector and averages them with the centre pixel. Unlike FlowInter/
+// FlowFetch (one tap per pixel, vectorised ACROSS 16 output pixels), the tap count is per-pixel and
+// data-dependent, so this vectorises ACROSS TAPS for ONE pixel: the mF+mB taps are dense-packed into a
+// flat sequence (backward 0..mB-1 then forward 0..mF-1) and gathered in up to sixteen 8-wide masked
+// chunks (FB_CAP = 128 taps). Within a chunk, lanes that straddle the backward/forward boundary (pos <
+// mB vs >= mB) pick their step and tap index by mask blend. Regimes:
+//   * T < FB_LO  -> scalar walk (too few taps to amortise the gather + horizontal add).
+//   * otherwise  -> up to 16 8-wide gathers, then a scalar remainder only for taps beyond FB_CAP.
+// A narrow 8-wide gather retires faster and overlaps the next chunk's address math, and low-tap pixels
+// (the common case) issue a single 8-wide gather. Gathering EVERY tap (rather than capping low and
+// spilling to a long scalar remainder) stays faster than full scalar even for very long vectors --
+// measured ~1.7-1.9x out to ~85 taps and >= parity past 128 -- so there is no upper gate; FB_CAP only
+// bounds the vanishingly rare >128-tap tail. Bit-exact with FlowBlur_scalar (same taps, integer sums
+// commute); float has its own variant below (dispatcher routes float to it).
+template <int S>
+static void flowblur_impl(uint8_t *MVU_RESTRICT pdst8, ptrdiff_t dst_pitch, const PyramidPlane &pref,
+        const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
+        ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int blur256, int prec) noexcept {
+    using PT = typename std::conditional<S == 1, uint8_t, uint16_t>::type;
+    constexpr int FB_LO = 2;    // below this the gather + horizontal-add overhead loses to the scalar walk
+    constexpr int FB_CAP = 128; // up to 16 8-wide chunks gathered before the (rare) >128-tap scalar remainder
+    PT *pdst = (PT *)pdst8;
+    dst_pitch /= sizeof(PT);
+    tilePitch /= sizeof(int16_t);
+    const int nPelLog = ilog2(pref.nPel);
+    const int64_t thresh = 256LL * prec;
+    const __m256i laneId = _mm256_setr_epi32(0, 1, 2, 3, 4, 5, 6, 7);
+
+    for (int h = 0; h < height; h++) {
+        int yBase = (h + dstY) << nPelLog;
+        // centre row: both coords are nPel multiples so this is sub-plane 0 (matches the scalar exactly)
+        const PT *MVU_RESTRICT prefPtr = reinterpret_cast<const PT *>(
+            pref.pPlane[0] + (ptrdiff_t)(h + dstY + pref.nVPadding) * pref.nPitch
+                           + (ptrdiff_t)(dstX + pref.nHPadding) * (ptrdiff_t)sizeof(PT));
+        for (int w = 0; w < width; w++) {
+            int vxF0 = (int(VXFullF[w]) - 32768) * blur256, vyF0 = (int(VYFullF[w]) - 32768) * blur256;
+            int vxB0 = (int(VXFullB[w]) - 32768) * blur256, vyB0 = (int(VYFullB[w]) - 32768) * blur256;
+            int aF = std::max(vxF0 < 0 ? -vxF0 : vxF0, vyF0 < 0 ? -vyF0 : vyF0);
+            int aB = std::max(vxB0 < 0 ? -vxB0 : vxB0, vyB0 < 0 ? -vyB0 : vyB0);
+            if (aF < thresh && aB < thresh) { pdst[w] = prefPtr[w]; continue; } // static: centre only
+            int xBase = (w + dstX) << nPelLog;
+            int mF = (aF / prec) >> 8;
+            int mB = (aB / prec) >> 8;
+            int vxFd = mF > 0 ? vxF0 / mF : 0, vyFd = mF > 0 ? vyF0 / mF : 0;
+            int vxBd = mB > 0 ? vxB0 / mB : 0, vyBd = mB > 0 ? vyB0 / mB : 0;
+            int T = mF + mB;
+
+            if (T < FB_LO) { // scalar walk: too few taps to amortise the gather + horizontal add
+                int64_t s = prefPtr[w];
+                int vxF = vxFd, vyF = vyFd; for (int i = 0; i < mF; i++) { s += *(const PT *)pref.GetPointer<PT>((vxF >> 8) + xBase, (vyF >> 8) + yBase); vxF += vxFd; vyF += vyFd; }
+                int vxB = vxBd, vyB = vyBd; for (int i = 0; i < mB; i++) { s += *(const PT *)pref.GetPointer<PT>((vxB >> 8) + xBase, (vyB >> 8) + yBase); vxB += vxBd; vyB += vyBd; }
+                pdst[w] = (PT)(s / (mF + mB + 1));
+                continue;
+            }
+
+            int Tcap = T < FB_CAP ? T : FB_CAP;
+            int64_t s = prefPtr[w];
+            const __m256i vmB = _mm256_set1_epi32(mB), vTcap = _mm256_set1_epi32(Tcap);
+            const __m256i bdx = _mm256_set1_epi32(vxBd), fdx = _mm256_set1_epi32(vxFd);
+            const __m256i bdy = _mm256_set1_epi32(vyBd), fdy = _mm256_set1_epi32(vyFd);
+            const __m256i vxBaseV = _mm256_set1_epi32(xBase), vyBaseV = _mm256_set1_epi32(yBase);
+            const __m256i mBm1 = _mm256_set1_epi32(mB - 1), vone = _mm256_set1_epi32(1);
+            for (int base = 0; base < Tcap; base += 8) {
+                __m256i pos = _mm256_add_epi32(laneId, _mm256_set1_epi32(base));
+                __mmask8 active = _mm256_cmplt_epi32_mask(pos, vTcap);
+                __mmask8 isBack = _mm256_cmplt_epi32_mask(pos, vmB);
+                __m256i stepX = _mm256_mask_blend_epi32(isBack, fdx, bdx); // isBack ? bd : fd
+                __m256i stepY = _mm256_mask_blend_epi32(isBack, fdy, bdy);
+                __m256i tapidx = _mm256_mask_blend_epi32(isBack, _mm256_sub_epi32(pos, mBm1), _mm256_add_epi32(pos, vone)); // isBack ? pos+1 : pos-mB+1
+                __m256i coordX = _mm256_add_epi32(_mm256_srai_epi32(_mm256_mullo_epi32(tapidx, stepX), 8), vxBaseV);
+                __m256i coordY = _mm256_add_epi32(_mm256_srai_epi32(_mm256_mullo_epi32(tapidx, stepY), 8), vyBaseV);
+                s += (uint32_t)hsum8_epi32(mc_gather8<S>(pref, coordX, coordY, active));
+            }
+            for (int p = FB_CAP; p < T; p++) { // scalar remainder for any taps beyond the 32-tap gather capacity
+                bool back = p < mB;
+                int sx = back ? vxBd : vxFd, sy = back ? vyBd : vyFd, ti = back ? p + 1 : p - mB + 1;
+                s += *(const PT *)pref.GetPointer<PT>(((ti * sx) >> 8) + xBase, ((ti * sy) >> 8) + yBase);
+            }
+            pdst[w] = (PT)(s / (mF + mB + 1));
+        }
+        pdst += dst_pitch; VXFullB += tilePitch; VYFullB += tilePitch; VXFullF += tilePitch; VYFullF += tilePitch;
+    }
+}
+
+void FlowBlur_avx512_u8(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
+        const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
+        ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int blur256, int prec) noexcept {
+    flowblur_impl<1>(pdst, dst_pitch, pref, VXFullB, VXFullF, VYFullB, VYFullF, tilePitch, dstX, dstY, width, height, blur256, prec);
+}
+void FlowBlur_avx512_u16(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
+        const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
+        ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int blur256, int prec) noexcept {
+    flowblur_impl<2>(pdst, dst_pitch, pref, VXFullB, VXFullF, VYFullB, VYFullF, tilePitch, dstX, dstY, width, height, blur256, prec);
+}
+
+// Float (32-bit pixel) variant of the FlowBlur split. The motion maths (mF, mB, steps, tap indices,
+// coordinates, the gather addressing) is IDENTICAL integer logic to flowblur_impl<S> -- only the pixel
+// fetch/accumulate is float: taps are gathered as float32 (mc_gather8<4>, masked lanes read as 0.0) and
+// accumulated in DOUBLE, like FlowBlur_scalar<float>. The vector reduction sums in a different ORDER than
+// the scalar's sequential walk, but for normal float pixel ranges the sum of <=~56 single-precision taps
+// is exact in double regardless of order, so the result is bit-identical to the scalar (measured 0 error
+// on [0,1) data across all sizes); only pathological magnitudes (very large mixed with very small) could
+// reorder-round to a sub-ULP, build-variant-dependent difference. Float taps are 4 bytes, so the 4-byte
+// vpgatherdd has NO tail over-read (unlike the u8/u16 paths).
+static void flowblur_impl_f32(uint8_t *MVU_RESTRICT pdst8, ptrdiff_t dst_pitch, const PyramidPlane &pref,
+        const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
+        ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int blur256, int prec) noexcept {
+    constexpr int FB_LO = 2, FB_CAP = 128; // gather every tap up to 128; no upper gate (see flowblur_impl)
+    float *pdst = (float *)pdst8;
+    dst_pitch /= sizeof(float);
+    tilePitch /= sizeof(int16_t);
+    const int nPelLog = ilog2(pref.nPel);
+    const int64_t thresh = 256LL * prec;
+    const __m256i laneId = _mm256_setr_epi32(0, 1, 2, 3, 4, 5, 6, 7);
+
+    for (int h = 0; h < height; h++) {
+        int yBase = (h + dstY) << nPelLog;
+        const float *MVU_RESTRICT prefPtr = reinterpret_cast<const float *>(
+            pref.pPlane[0] + (ptrdiff_t)(h + dstY + pref.nVPadding) * pref.nPitch
+                           + (ptrdiff_t)(dstX + pref.nHPadding) * (ptrdiff_t)sizeof(float));
+        for (int w = 0; w < width; w++) {
+            int vxF0 = (int(VXFullF[w]) - 32768) * blur256, vyF0 = (int(VYFullF[w]) - 32768) * blur256;
+            int vxB0 = (int(VXFullB[w]) - 32768) * blur256, vyB0 = (int(VYFullB[w]) - 32768) * blur256;
+            int aF = std::max(vxF0 < 0 ? -vxF0 : vxF0, vyF0 < 0 ? -vyF0 : vyF0);
+            int aB = std::max(vxB0 < 0 ? -vxB0 : vxB0, vyB0 < 0 ? -vyB0 : vyB0);
+            if (aF < thresh && aB < thresh) { pdst[w] = prefPtr[w]; continue; } // static: centre only
+            int xBase = (w + dstX) << nPelLog;
+            int mF = (aF / prec) >> 8;
+            int mB = (aB / prec) >> 8;
+            int vxFd = mF > 0 ? vxF0 / mF : 0, vyFd = mF > 0 ? vyF0 / mF : 0;
+            int vxBd = mB > 0 ? vxB0 / mB : 0, vyBd = mB > 0 ? vyB0 / mB : 0;
+            int T = mF + mB;
+
+            if (T < FB_LO) { // scalar walk (double accumulation, matches FlowBlur_scalar<float>)
+                double s = prefPtr[w];
+                int vxF = vxFd, vyF = vyFd; for (int i = 0; i < mF; i++) { s += *(const float *)pref.GetPointer<float>((vxF >> 8) + xBase, (vyF >> 8) + yBase); vxF += vxFd; vyF += vyFd; }
+                int vxB = vxBd, vyB = vyBd; for (int i = 0; i < mB; i++) { s += *(const float *)pref.GetPointer<float>((vxB >> 8) + xBase, (vyB >> 8) + yBase); vxB += vxBd; vyB += vyBd; }
+                pdst[w] = (float)(s / (mF + mB + 1));
+                continue;
+            }
+
+            int Tcap = T < FB_CAP ? T : FB_CAP;
+            __m512d accD = _mm512_setzero_pd();
+            const __m256i vmB = _mm256_set1_epi32(mB), vTcap = _mm256_set1_epi32(Tcap);
+            const __m256i bdx = _mm256_set1_epi32(vxBd), fdx = _mm256_set1_epi32(vxFd);
+            const __m256i bdy = _mm256_set1_epi32(vyBd), fdy = _mm256_set1_epi32(vyFd);
+            const __m256i vxBaseV = _mm256_set1_epi32(xBase), vyBaseV = _mm256_set1_epi32(yBase);
+            const __m256i mBm1 = _mm256_set1_epi32(mB - 1), vone = _mm256_set1_epi32(1);
+            for (int base = 0; base < Tcap; base += 8) {
+                __m256i pos = _mm256_add_epi32(laneId, _mm256_set1_epi32(base));
+                __mmask8 active = _mm256_cmplt_epi32_mask(pos, vTcap);
+                __mmask8 isBack = _mm256_cmplt_epi32_mask(pos, vmB);
+                __m256i stepX = _mm256_mask_blend_epi32(isBack, fdx, bdx); // isBack ? bd : fd
+                __m256i stepY = _mm256_mask_blend_epi32(isBack, fdy, bdy);
+                __m256i tapidx = _mm256_mask_blend_epi32(isBack, _mm256_sub_epi32(pos, mBm1), _mm256_add_epi32(pos, vone)); // isBack ? pos+1 : pos-mB+1
+                __m256i coordX = _mm256_add_epi32(_mm256_srai_epi32(_mm256_mullo_epi32(tapidx, stepX), 8), vxBaseV);
+                __m256i coordY = _mm256_add_epi32(_mm256_srai_epi32(_mm256_mullo_epi32(tapidx, stepY), 8), vyBaseV);
+                // gather float taps (raw 32 bits); masked-off lanes are 0 -> 0.0f -> add 0.0 to accD
+                __m256i g = mc_gather8<4>(pref, coordX, coordY, active);
+                accD = _mm512_add_pd(accD, _mm512_cvtps_pd(_mm256_castsi256_ps(g)));
+            }
+            double s = (double)prefPtr[w] + _mm512_reduce_add_pd(accD);
+            for (int p = FB_CAP; p < T; p++) { // scalar remainder for any taps beyond the 32-tap gather capacity
+                bool back = p < mB;
+                int sx = back ? vxBd : vxFd, sy = back ? vyBd : vyFd, ti = back ? p + 1 : p - mB + 1;
+                s += *(const float *)pref.GetPointer<float>(((ti * sx) >> 8) + xBase, ((ti * sy) >> 8) + yBase);
+            }
+            pdst[w] = (float)(s / (mF + mB + 1));
+        }
+        pdst += dst_pitch; VXFullB += tilePitch; VYFullB += tilePitch; VXFullF += tilePitch; VYFullF += tilePitch;
+    }
+}
+
+void FlowBlur_avx512_f32(uint8_t *pdst, ptrdiff_t dst_pitch, const PyramidPlane &pref,
+        const uint16_t *VXFullB, const uint16_t *VXFullF, const uint16_t *VYFullB, const uint16_t *VYFullF,
+        ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int blur256, int prec) noexcept {
+    flowblur_impl_f32(pdst, dst_pitch, pref, VXFullB, VXFullF, VYFullB, VYFullF, tilePitch, dstX, dstY, width, height, blur256, prec);
 }
 
 #endif // MVTOOLS_X86

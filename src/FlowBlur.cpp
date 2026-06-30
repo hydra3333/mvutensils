@@ -27,6 +27,7 @@
 #include "SuperPyramid.h"
 #include "MotionBlockPyramid.h"
 #include "MaskResize.h"
+#include "FlowShared.h"
 
 struct FlowBlurData {
     VSNode *node = nullptr;
@@ -61,7 +62,7 @@ struct FlowBlurData {
 };
 
 template<typename PixelType>
-static void FlowBlur(uint8_t * MVU_RESTRICT pdst8, ptrdiff_t dst_pitch, const PyramidPlane &pref,
+static void FlowBlur_scalar(uint8_t * MVU_RESTRICT pdst8, ptrdiff_t dst_pitch, const PyramidPlane &pref,
                          const uint16_t * MVU_RESTRICT VXFullB, const uint16_t *MVU_RESTRICT VXFullF, const uint16_t *MVU_RESTRICT VYFullB, const uint16_t *MVU_RESTRICT VYFullF,
                          ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int blur256, int prec) noexcept {
     PixelType *pdst = (PixelType *)pdst8;
@@ -127,6 +128,28 @@ static void FlowBlur(uint8_t * MVU_RESTRICT pdst8, ptrdiff_t dst_pitch, const Py
         VXFullF += tilePitch;
         VYFullF += tilePitch;
     }
+}
+
+// Dispatch: per-pixel AVX-512 tap-gather when the int32 gather offsets fit, else the scalar walk.
+// u8/u16 are bit-exact with the scalar across all build variants. The float gather reorders the double
+// sum but matches scalar float bit-for-bit for normal pixel ranges (measured 0 error); only pathological
+// magnitudes could differ sub-ULP between the avx512 build and the scalar baseline/avx2 builds.
+template<typename PixelType>
+static MVU_FORCE_INLINE void FlowBlur(uint8_t * MVU_RESTRICT pdst8, ptrdiff_t dst_pitch, const PyramidPlane &pref,
+                         const uint16_t * MVU_RESTRICT VXFullB, const uint16_t *MVU_RESTRICT VXFullF, const uint16_t *MVU_RESTRICT VYFullB, const uint16_t *MVU_RESTRICT VYFullF,
+                         ptrdiff_t tilePitch, int dstX, int dstY, int width, int height, int blur256, int prec) noexcept {
+#if defined(MVTOOLS_X86)
+    if (FlowGatherFits(pref) && (g_cpuinfo & MVU_CPU_AVX512_BASE)) {
+        if constexpr (sizeof(PixelType) == 1)
+            FlowBlur_avx512_u8(pdst8, dst_pitch, pref, VXFullB, VXFullF, VYFullB, VYFullF, tilePitch, dstX, dstY, width, height, blur256, prec);
+        else if constexpr (sizeof(PixelType) == 2)
+            FlowBlur_avx512_u16(pdst8, dst_pitch, pref, VXFullB, VXFullF, VYFullB, VYFullF, tilePitch, dstX, dstY, width, height, blur256, prec);
+        else
+            FlowBlur_avx512_f32(pdst8, dst_pitch, pref, VXFullB, VXFullF, VYFullB, VYFullF, tilePitch, dstX, dstY, width, height, blur256, prec);
+        return;
+    }
+#endif
+    FlowBlur_scalar<PixelType>(pdst8, dst_pitch, pref, VXFullB, VXFullF, VYFullB, VYFullF, tilePitch, dstX, dstY, width, height, blur256, prec);
 }
 
 template<typename PixelType>
