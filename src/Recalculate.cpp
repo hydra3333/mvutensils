@@ -52,17 +52,12 @@ struct RecalculateData {
 static const VSFrame *VS_CC recalculateGetFrame(int n, int activationReason, void *instanceData, [[maybe_unused]] void **frameData, VSFrameContext *frameCtx, VSCore *core, const VSAPI *vsapi) noexcept {
     RecalculateData *d = reinterpret_cast<RecalculateData *>(instanceData);
 
-    int nref = n + d->deltaFrame;
+    int nref = std::clamp(n + d->deltaFrame, 0, d->vi->numFrames - 1);
 
     if (activationReason == arInitial) {
         vsapi->requestFrameFilter(n, d->vectors, frameCtx);
-
-        if (nref >= 0 && nref < d->vi->numFrames) {
-            vsapi->requestFrameFilter(std::min(n, nref), d->super, frameCtx);
-            vsapi->requestFrameFilter(std::max(n, nref), d->super, frameCtx);
-        } else { // too close to beginning/end of clip
-            vsapi->requestFrameFilter(n, d->super, frameCtx);
-        }
+        vsapi->requestFrameFilter(std::min(n, nref), d->super, frameCtx);
+        vsapi->requestFrameFilter(std::max(n, nref), d->super, frameCtx);
     } else if (activationReason == arAllFramesReady) {
         try {
             const VSFrame *src = vsapi->getFrameFilter(n, d->super, frameCtx);
@@ -72,7 +67,7 @@ static const VSFrame *VS_CC recalculateGetFrame(int n, int activationReason, voi
 
             MotionBlockPyramid fgop(vsapi->getFrameFilter(n, d->vectors, frameCtx), 1, d->prefix, vsapi);
 
-            const VSFrame *ref = vsapi->getFrameFilter(std::clamp(nref, 0, d->vi->numFrames - 1), d->super, frameCtx);
+            const VSFrame *ref = vsapi->getFrameFilter(nref, d->super, frameCtx);
             FramePyramid pRefGOF(ref, 1, d->prefix, vsapi);
 
             int fieldShift = 0;
@@ -94,7 +89,7 @@ static const VSFrame *VS_CC recalculateGetFrame(int n, int activationReason, voi
     return nullptr;
 }
 
-static void VS_CC recalculateCreate(const VSMap *in, VSMap *out, [[maybe_unused]] void *userData, VSCore *core, const VSAPI *vsapi) noexcept {
+static void recalculateCreate(const VSMap *in, VSMap *out, [[maybe_unused]] void *userData, VSCore *core, const VSAPI *vsapi) noexcept {
     std::unique_ptr<RecalculateData> d = std::make_unique<RecalculateData>(vsapi);
     int err;
 
@@ -202,11 +197,34 @@ static void VS_CC recalculateCreate(const VSMap *in, VSMap *out, [[maybe_unused]
     d.release();
 }
 
+static void VS_CC recalculateCreateWrapper(const VSMap *in, VSMap *out, [[maybe_unused]] void *userData, VSCore *core, const VSAPI *vsapi) noexcept {
+    int numVectors = vsapi->mapNumElements(in, "vectors");
+    if (numVectors == 1) {
+        recalculateCreate(in, out, userData, core, vsapi);
+    } else {
+        VSMap *inArgs = vsapi->createMap();
+        vsapi->copyMap(in, inArgs);
+
+        for (int i = 0; i < numVectors; ++i) {
+            vsapi->mapConsumeNode(inArgs, "vectors", vsapi->mapGetNode(in, "vectors", i, nullptr), maReplace);
+            recalculateCreate(inArgs, out, userData, core, vsapi);
+            const char *error = vsapi->mapGetError(out);
+            if (error) {
+                std::string errMsg = "Recalculate: Error when recalculating vector " + std::to_string(i) + ": " + error;
+                vsapi->clearMap(out);
+                vsapi->mapSetError(out, errMsg.c_str());
+                break;
+            }
+        }
+
+        vsapi->freeMap(inArgs);
+    }
+}
 
 void recalculateRegister(VSPlugin *plugin, const VSPLUGINAPI *vspapi) noexcept {
     vspapi->registerFunction("Recalculate",
                  "super:vnode;"
-                 "vectors:vnode;"
+                 "vectors:vnode[];"
                  "thsad:int:opt;"
                  "smooth:int:opt;"
                  "blksize:int[]:opt;"
@@ -221,6 +239,6 @@ void recalculateRegister(VSPlugin *plugin, const VSPLUGINAPI *vspapi) noexcept {
                  "tff:int:opt;"
                  "satd:int:opt;"
                  "prefix:data:opt;",
-                 "clip:vnode;",
-                 recalculateCreate, nullptr, plugin);
+                 "clip:vnode[];",
+                 recalculateCreateWrapper, nullptr, plugin);
 }

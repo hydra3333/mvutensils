@@ -76,6 +76,8 @@ Changes
 
     * The truemotion argument was removed due to it only being a poor preset selector, the new fixed defaults are mvlambda=1000 (per 8x8 block, scales with block area), lsad=400, plevel=1, globalmv=True, pnew=25
     
+    * Recalculate can now be passed an array of vectors to be recalculated at once with the same settings
+    
     * Speedups due to no longer testing the same motion vector predictors multiple times
     
 * AnalyseMany:

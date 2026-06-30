@@ -254,13 +254,23 @@ Re-estimates an existing vector field at (typically) a finer block size, refinin
 already have instead of searching from scratch. Pair it with a halved `blksize`/`overlap`.
 
 ```py
-core.mvu.Recalculate(clip super, clip vectors[, int thsad=200, bint smooth=True, int[] blksize=<from super>, int search=2, int searchparam=2, int mvlambda=1000, bint chroma=True, int pnew=25, int[] overlap=<from super>, bint meander=True, bint fields=False, bint tff=False, bint satd=False, str prefix="MVUtensils"])
+core.mvu.Recalculate(clip super, clip[] vectors[, int thsad=200, bint smooth=True, int[] blksize=<from super>, int search=2, int searchparam=2, int mvlambda=1000, bint chroma=True, int pnew=25, int[] overlap=<from super>, bint meander=True, bint fields=False, bint tff=False, bint satd=False, str prefix="MVUtensils"])
+```
+
+`vectors` takes a single vector clip or a whole list, and the result is the list of refined clips in
+the same order so an entire `AnalyseMany` set can be refined in one call:
+
+```py
+super = core.mvu.Super(clip, blksize=8, overlap=4)
+vectors = core.mvu.AnalyseMany(super, radius=2)                       # [bw1, fw1, bw2, fw2]
+vectors = core.mvu.Recalculate(super, vectors, blksize=4, overlap=2)  # refine all at half block size
+out = core.mvu.Degrain(clip, super, vectors)
 ```
 
 | Parameter | Type | Options (Default) | Description |
 | --- | --- | --- | --- |
 | super | clip | (required) | Super clip. Only one level is needed. |
-| vectors | clip | (required) | Vector clip to refine. |
+| vectors | clip[] | (required) | Vector clip(s) to refine — a single clip or a whole list (e.g. an `AnalyseMany` set). The recalculated clips are returned as a list in the same order. |
 | thsad | int | (200) | Blocks whose SAD is below this keep their vector; worse blocks are re-searched. |
 | smooth | bint | (True) | Interpolate the new (finer) vector field from neighbours (True) or take the nearest old vector (False). `smooth=False` roughly matches the old `divide=1` behaviour, `smooth=True` ≈ `divide=2`. |
 | blksize | int[] | (super's value) | Finer block size `[h, v]`. Usually half of the original. |
@@ -278,9 +288,11 @@ redundant, and the multi-level / multi-predictor machinery those other penalties
 present here. `mvlambda` is still honoured: it biases each refined vector to stay near the one it
 started from.
 
-> **Porting:** `Recalculate` will raise an error if the chosen `blksize`/`overlap` can't cover the
-> whole frame (unlike `Super`, which pads). Halving `blksize`+`overlap` and reusing the existing
-> super usually works, unusual splits may need a new super clip.
+> **Porting:** `Recalculate` takes a **list** of vector clips (and returns a list), so a whole
+> `AnalyseMany` set is refined in one call instead of recalculating each clip separately. It will also
+> raise an error if the chosen `blksize`/`overlap` can't cover the whole frame (unlike `Super`, which
+> pads). Halving `blksize`+`overlap` and reusing the existing super usually works, unusual splits may
+> need a new super clip.
 
 ## Degrain
 
