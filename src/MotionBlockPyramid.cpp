@@ -1563,7 +1563,7 @@ MotionBlockPyramid::~MotionBlockPyramid() {
 void MotionBlockPyramid::SearchMVs(const FramePyramid &pSrcGOF, const FramePyramid &pRefGOF,
     SearchType searchType, int nSearchParam, int nPelSearch, int64_t nLambda,
     int64_t lsad, int pnew, int plevel, bool global, int fieldShift, bool useSatd,
-    int pzero, int pglobal, int64_t badSAD, int badrange, bool meander, bool tryMany,
+    int pzero, int pglobal, int64_t badSAD, int badrange, bool meander, TryManyLevels tryMany,
     bool chroma) {
 
     if (state != State::ReadyForSearch)
@@ -1584,16 +1584,19 @@ void MotionBlockPyramid::SearchMVs(const FramePyramid &pSrcGOF, const FramePyram
 
     int bytesPerSample = SelectOnBitsPerSample(pSrcGOF.bitsPerSample, 1, 2, 4);
 
+    auto tryManyLevel = [tryMany] (bool FinestLevel) {
+        return (tryMany == TryManyLevels::All || (tryMany == TryManyLevels::AllExceptFinest && !FinestLevel));
+    };
+
     // Search the motion vectors, for the low details interpolations first
     SearchType searchTypeSmallest = (nLevelCount == 1 || searchType == SearchType::Horizontal || searchType == SearchType::Vertical) ? searchType : SearchType::Exhaustive; // full search for smallest coarse plane
     int nSearchParamSmallest = (nLevelCount == 1) ? nPelSearch : nSearchParam;
-    bool tryManyLevel = tryMany && nLevelCount > 1;
     pyramidLevels[nLevelCount - 1].SearchMVs(
         pSrcGOF.GetLevel(nLevelCount - 1),
         pRefGOF.GetLevel(nLevelCount - 1),
         searchTypeSmallest, nSearchParamSmallest, nLambda, lsad, pnew, plevel,
         &globalMV, fieldShiftCur, useSatd,
-        pzero, pglobal, badSAD, badrange, meander, tryManyLevel, chroma, bytesPerSample);
+        pzero, pglobal, badSAD, badrange, meander, tryManyLevel(nLevelCount == 1), chroma, bytesPerSample);
     // Refining the search until we reach the highest detail interpolation.
 
     for (int i = nLevelCount - 2; i >= 0; i--) {
@@ -1604,11 +1607,10 @@ void MotionBlockPyramid::SearchMVs(const FramePyramid &pSrcGOF, const FramePyram
         }
         pyramidLevels[i].InterpolatePredictorsFromParent(pyramidLevels[i + 1]);
         fieldShiftCur = (i == 0) ? fieldShift : 0; // may be non zero for finest level only
-        tryManyLevel = tryMany && i > 0;           // not for finest level to not decrease speed
         pyramidLevels[i].SearchMVs(pSrcGOF.GetLevel(i), pRefGOF.GetLevel(i),
             searchTypeLevel, nSearchParamLevel, nLambda, lsad, pnew, plevel,
             &globalMV, fieldShiftCur, useSatd,
-            pzero, pglobal, badSAD, badrange, meander, tryManyLevel, chroma, bytesPerSample);
+            pzero, pglobal, badSAD, badrange, meander, tryManyLevel(i == 0), chroma, bytesPerSample);
     }
 
     state = State::AnalysisDone;

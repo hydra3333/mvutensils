@@ -60,6 +60,8 @@ Changes
     
     * The search and pelsearch argument had mode 0 and 1 removed, as a result all remaining mode have been adjusted by -2
     
+    * The trymany argument is now an 0-2 int instead of bool, the old modes are equivalent to 0/1. The new 2 means to try many motion vector candidates on all levels and not only all but the finest (old trymany=True)
+    
     * Removed search_coarse argument since nobody actually used it ever and it was left at the exhaustive default
     
     * Removed the divide argument since no good use case seems to exist, in recalculate Recalculate you can already get an effect similar to divide=1/2 depending on smooth=False/True

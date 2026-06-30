@@ -154,7 +154,7 @@ core.mvu.Super(clip clip, int[] blksize, int[] overlap[, int[] pad=[16, 16], int
 Estimates a field of motion vectors for one temporal direction/distance.
 
 ```py
-core.mvu.Analyse(clip super[, int[] blksize=<from super>, int[] overlap=<from super>, int levels=0, int search=2, int searchparam=2, int pelsearch=<pel>, int mvlambda=1000, bint chroma=True, int delta=1, int lsad=400, int plevel=1, bint globalmv=True, int pnew=25, int pzero=<pnew>, int pglobal=0, int badsad=10000, int badrange=24, bint meander=True, bint trymany=False, bint fields=False, bint tff=False, bint satd=False, str prefix="MVUtensils"])
+core.mvu.Analyse(clip super[, int[] blksize=<from super>, int[] overlap=<from super>, int levels=0, int search=2, int searchparam=2, int pelsearch=<pel>, int mvlambda=1000, bint chroma=True, int delta=1, int lsad=400, int plevel=1, bint globalmv=True, int pnew=25, int pzero=<pnew>, int pglobal=0, int badsad=10000, int badrange=24, bint meander=True, int trymany=0, bint fields=False, bint tff=False, bint satd=False, str prefix="MVUtensils"])
 ```
 
 | Parameter | Type | Options (Default) | Description |
@@ -178,7 +178,7 @@ core.mvu.Analyse(clip super[, int[] blksize=<from super>, int[] overlap=<from su
 | badsad | int | (10000) | SAD above which a block gets a second, wider search. Given per 8×8 block (scaled by `blksizeh·blksizev/64`). |
 | badrange | int | (24) | Radius of that wider search. |
 | meander | bint | (True) | Scan block rows alternately left-to-right / right-to-left for better predictor reuse. |
-| trymany | bint | (False) | Try multiple predictors at coarse levels too (slower, occasionally better). |
+| trymany | int | 0–2 (0) | Try multiple motion-vector candidates per block instead of only the single best predictor (slower, occasionally better). `0` = off; `1` = on every pyramid level **except** the finest; `2` = on **all** levels including the finest. |
 | fields | bint | (False) | Treat the clip as field-based. |
 | tff | bint | (False) | Top field first (only relevant with `fields=True`). |
 | satd | bint | (False) | Use SATD instead of plain SAD as the block metric. Equivalent to mvtools `dct=5`. |
@@ -220,7 +220,9 @@ photometric match. The three parameters shape that trade-off:
 > **Porting:** `isb` is gone — direction is now the sign of `delta` (negative = forward).
 > `dct` became the boolean `satd` (`dct=0`→`satd=False`, `dct=5`→`satd=True`). `search`/`pelsearch`
 > modes lost the old 0 and 1, so subtract 2 from your old value. `lambda`→`mvlambda`,
-> `global`→`globalmv`. The `truemotion` preset was removed in favour of fixed defaults: `mvlambda=1000`
+> `global`→`globalmv`. `trymany` is now a 0–2 int instead of a bool — the old `False`/`True` map to
+> `0`/`1`, and the new `2` also tries multiple candidates on the finest level.
+> The `truemotion` preset was removed in favour of fixed defaults: `mvlambda=1000`
 > (per 8×8 block, scaled by block area), `lsad=400`, `plevel=1`, `globalmv=True`, `pnew=25`. These are mostly the old
 > `truemotion=True` values, except `lsad` (now 400, the old `truemotion=False` value — it was 1200
 > under `truemotion=True`) and `pnew` (now 25, midway between the old 50 / 0). The `search_coarse` and

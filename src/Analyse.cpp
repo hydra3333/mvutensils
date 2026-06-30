@@ -39,7 +39,7 @@ struct AnalyseData {
     int64_t badSAD; 
     int badrange;   
     bool meander;   
-    bool tryMany;  
+    TryManyLevels tryMany;  
     bool useSatd;
 
     int levels;
@@ -198,7 +198,9 @@ static void VS_CC analyseCreate(const VSMap *in, VSMap *out, [[maybe_unused]] vo
         if (err)
             d->meander = true;
 
-        d->tryMany = !!vsapi->mapGetInt(in, "trymany", 0, &err);
+        d->tryMany = static_cast<TryManyLevels>(vsapi->mapGetIntSaturated(in, "trymany", 0, &err));
+        if (d->tryMany != TryManyLevels::None && d->tryMany != TryManyLevels::All && d->tryMany != TryManyLevels::AllExceptFinest)
+            throw std::runtime_error("trymany must be between 0 and 2");
 
         d->fields = !!vsapi->mapGetInt(in, "fields", 0, &err);
 

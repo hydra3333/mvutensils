@@ -64,6 +64,11 @@ enum class SearchType {
     Vertical
 };
 
+enum class TryManyLevels {
+    None = 0,
+    AllExceptFinest = 1,
+    All = 2
+};
 
 static constexpr const VECTOR zeroMV = { 0, 0, -1 };
 
@@ -288,7 +293,7 @@ public:
     void SearchMVs(const FramePyramid &pSrcGOF, const FramePyramid &pRefGOF,
         SearchType searchType, int nSearchParam, int nPelSearch, int64_t nLambda,
         int64_t lsad, int pnew, int plevel, bool global, int fieldShift, bool useSatd,
-        int pzero, int pglobal, int64_t badSAD, int badrange, bool meander, bool tryMany,
+        int pzero, int pglobal, int64_t badSAD, int badrange, bool meander, TryManyLevels tryMany,
         bool chroma);
 
     // FIXME, currently you can't SearchMVs and then RecalculateMVs on the same object and instead it needs to be exported and imported into a new one
