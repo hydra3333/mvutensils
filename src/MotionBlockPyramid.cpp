@@ -1131,6 +1131,10 @@ void MotionBlockLevel::DoRecalculateMVs(const FramePyramidLevel &pSrcFrame, cons
     if (nWidth_B > nWidth || nHeight_B > nHeight)
         throw MotionBlockPyramidError("The chosen block size has no multiple that will process the entire frame without exceeding the super clip padding, derive a new suitable super clip and try again");
 
+    // Early exit when there are no vectors to recalculate, this usually happens due to Analyse not being able to derive vectors because the reference frame (n+delta) is out of bounds
+    if (oldVectors.empty())
+        return;
+
     vectors.resize(nBlkX * nBlkY);
 
     VECTOR *pBlkData = vectors.data();
@@ -1473,6 +1477,7 @@ void MotionBlockPyramid::LoadFrameData(const VSFrame *srcFrame, bool loadVectors
         int sadSize = vsapi->mapNumElements(props, sadProp.c_str());
 
         if (vectSize != sadSize || vectSize != nBlkX * nBlkY) {
+            pyramidLevels[0].vectors.clear();
             state = State::MetadataOnly;
             return;
         }
@@ -1572,7 +1577,7 @@ void MotionBlockPyramid::SearchMVs(const FramePyramid &pSrcGOF, const FramePyram
     if (!pSrcGOF.IsCompatible(pRefGOF))
         throw MotionBlockPyramidError("The two reference frames don't have the same format");
 
-    if (!IsCompatibleForAnalysis(pSrcGOF) || !IsCompatibleForAnalysis(pRefGOF))
+    if (!IsCompatibleWithAnalysis(pSrcGOF) || !IsCompatibleWithAnalysis(pRefGOF))
         throw MotionBlockPyramidError("Incompatible frame format for motion vector search, bitdepth must match");
 
     int fieldShiftCur = (nLevelCount - 1 == 0) ? fieldShift : 0; // may be non zero for finest level only
@@ -1620,10 +1625,7 @@ void MotionBlockPyramid::SearchMVs(const FramePyramid &pSrcGOF, const FramePyram
 void MotionBlockPyramid::RecalculateMVs(const FramePyramid &pSrcGOF, const FramePyramid &pRefGOF,
     int nBlkSizeX, int nBlkSizeY, int nOverlapX, int nOverlapY, bool chroma,
     SearchType searchType, int nSearchParam, int64_t nLambda, int pnew,
-    int fieldShift, int64_t thSAD, bool useSatd, bool smooth, bool meander) {
-
-    if (state != State::ReadyForRecalculate)
-        throw MotionBlockPyramidError("MotionBlockPyramid isn't in an appropriate state for recalculating motion vectors");
+    int fieldShift, int64_t thSAD, bool useSatd, bool smooth, bool meander, int deltaFrame) {
 
     if (!IsCompatibleForRecalc(pSrcGOF) || !IsCompatibleForRecalc(pRefGOF))
         throw MotionBlockPyramidError("Incompatible frame format for motion vector recalculation, bitdepth must match");
@@ -1656,6 +1658,7 @@ void MotionBlockPyramid::RecalculateMVs(const FramePyramid &pSrcGOF, const Frame
     nHPadding = pSrcGOF.nHPad[0];
     nVPadding = pSrcGOF.nVPad[0];
     this->chroma = chroma;
+    this->nDeltaFrame = deltaFrame;
 
     state = State::AnalysisDone;
 }
@@ -1754,6 +1757,9 @@ bool MotionBlockPyramid::IsCompatible(const MotionBlockPyramid &other) const noe
     if (nBlkSizeX != other.nBlkSizeX || nBlkSizeY != other.nBlkSizeY || nOverlapX != other.nOverlapX || nOverlapY != other.nOverlapY)
         return false;
 
+    if (nBlkX != other.nBlkX || nBlkY != other.nBlkY)
+        return false;
+
     if (nPel != other.nPel)
         return false;
 
@@ -1769,7 +1775,7 @@ bool MotionBlockPyramid::IsCompatible(const MotionBlockPyramid &other) const noe
     return true;
 }
 
-bool MotionBlockPyramid::IsCompatibleForAnalysis(const FramePyramid &other) const noexcept {
+bool MotionBlockPyramid::IsCompatibleWithAnalysis(const FramePyramid &other) const noexcept {
     if (nWidth != other.nWidth[0] || nHeight != other.nHeight[0] || nRealWidth != other.nRealWidth[0] || nRealHeight != other.nRealHeight[0])
         return false;
 

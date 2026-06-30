@@ -70,21 +70,17 @@ static const VSFrame *VS_CC recalculateGetFrame(int n, int activationReason, voi
 
             bool src_top_field = GetTopField(src, n, d->tff_exists, d->tff, d->fields, vsapi);
 
-
             MotionBlockPyramid fgop(vsapi->getFrameFilter(n, d->vectors, frameCtx), 1, d->prefix, vsapi);
 
-            if (fgop.HasMotionVectors() && nref >= 0 && nref < d->vi->numFrames) {
-                const VSFrame *ref = vsapi->getFrameFilter(nref, d->super, frameCtx);
-                FramePyramid pRefGOF(ref, 1, d->prefix, vsapi);
+            const VSFrame *ref = vsapi->getFrameFilter(std::clamp(nref, 0, d->vi->numFrames - 1), d->super, frameCtx);
+            FramePyramid pRefGOF(ref, 1, d->prefix, vsapi);
 
-                bool ref_top_field = GetTopField(ref, nref, d->tff_exists, d->tff, d->fields, vsapi);
+            int fieldShift = 0;
+            if (d->fields && d->nPel > 1 && (d->deltaFrame % 2))
+                fieldShift = ComputeFieldShift(src_top_field, GetTopField(ref, nref, d->tff_exists, d->tff, d->fields, vsapi), d->nPel);
 
-                int fieldShift = 0;
-                if (d->fields && d->nPel > 1 && (d->deltaFrame % 2))
-                    fieldShift = ComputeFieldShift(src_top_field, ref_top_field, d->nPel);
-
-                fgop.RecalculateMVs(pSrcGOF, pRefGOF, d->nBlkSizeX, d->nBlkSizeY, d->nOverlapX, d->nOverlapY, d->chroma, d->searchType, d->searchparam, d->nLambda, d->pnew, fieldShift, d->thSAD, d->useSatd, d->smooth, d->meander);
-            }
+            fgop.RecalculateMVs(pSrcGOF, pRefGOF, d->nBlkSizeX, d->nBlkSizeY, d->nOverlapX, d->nOverlapY, d->chroma,
+                d->searchType, d->searchparam, d->nLambda, d->pnew, fieldShift, d->thSAD, d->useSatd, d->smooth, d->meander, d->deltaFrame);
 
             VSFrame *dst = vsapi->copyFrame(src, core);
             fgop.ExportFrameData(dst, d->prefix, vsapi);

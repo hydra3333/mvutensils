@@ -301,7 +301,7 @@ public:
     void RecalculateMVs(const FramePyramid &pSrcGOF, const FramePyramid &pRefGOF,
         int nBlkSizeX, int nBlkSizeY, int nOverlapX, int nOverlapY, bool chroma,
         SearchType searchType, int nSearchParam, int64_t nLambda, int pnew,
-        int fieldShift, int64_t thSAD, bool useSatd, bool smooth, bool meander);
+        int fieldShift, int64_t thSAD, bool useSatd, bool smooth, bool meander, int deltaFrame);
 
     [[nodiscard]] bool IsUsable(int64_t thscd1, float thscd2) const noexcept;
     [[nodiscard]] BlockData GetBlock(int nBlk) const noexcept;
@@ -311,7 +311,7 @@ public:
     [[nodiscard]] bool HasMotionVectors() const noexcept;
 
     [[nodiscard]] bool IsCompatible(const MotionBlockPyramid &other) const noexcept;
-    [[nodiscard]] bool IsCompatibleForAnalysis(const FramePyramid &other) const noexcept;
+    [[nodiscard]] bool IsCompatibleWithAnalysis(const FramePyramid &other) const noexcept;
     [[nodiscard]] bool IsCompatibleForRecalc(const FramePyramid &other) const noexcept;
 
     template<typename PixelType>

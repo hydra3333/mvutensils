@@ -348,7 +348,7 @@ static void VS_CC flowfpsCreate(const VSMap *in, VSMap *out, [[maybe_unused]] vo
 
         d->deltaFrame = vectorsFw.nDeltaFrame;
 
-        if (!vectorsFw.IsCompatibleForAnalysis(super))
+        if (!vectorsFw.IsCompatibleWithAnalysis(super))
             throw std::runtime_error("wrong source or super clip frame size");
 
         if (!vectorsFw.IsCompatible(vectorsBw) || (vectorsBw.nDeltaFrame != -vectorsFw.nDeltaFrame) || vectorsFw.nDeltaFrame > 0 || vectorsBw.nDeltaFrame < 0)

@@ -220,7 +220,7 @@ static void VS_CC flowCreate(const VSMap *in, VSMap *out, [[maybe_unused]] void 
 
         d->deltaFrame = vectors.nDeltaFrame;
 
-        if (!vectors.IsCompatibleForAnalysis(super))
+        if (!vectors.IsCompatibleWithAnalysis(super))
             throw std::runtime_error("wrong source or super clip frame size");
 
         d->maskResizerFull.Init(vectors.nBlkX, vectors.nBlkY, vectors.nBlkSizeX, vectors.nBlkSizeY, vectors.nOverlapX, vectors.nOverlapY,
