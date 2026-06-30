@@ -130,7 +130,7 @@ Prepares a clip for motion estimation: it pads the frame, optionally generates s
 (`pel`) planes, and builds the hierarchical pyramid used by `Analyse`.
 
 ```py
-core.mvu.Super(clip clip, int[] blksize, int[] overlap[, int[] pad=[16, 16], int pel=2, int sharp=2, int rfilter=1, bint onelevel=False, clip pelclip=None, str prefix="MVUtensils"])
+core.mvu.Super(vnode clip, int[] blksize, int[] overlap[, int[] pad=[16, 16], int pel=2, int sharp=2, int rfilter=1, bint onelevel=False, vnode pelclip=None, str prefix="MVUtensils"])
 ```
 
 | Parameter | Type | Options (Default) | Description |
@@ -143,7 +143,7 @@ core.mvu.Super(clip clip, int[] blksize, int[] overlap[, int[] pad=[16, 16], int
 | sharp | int | 0–2 (2) | Sub-pixel interpolation for `pel` > 1: 0 = bilinear, 1 = bicubic, 2 = Wiener (sharpest). |
 | rfilter | int | 0–2 (1) | Pyramid downscale filter: 0 = simple average, 1 = bilinear, 2 = cubic. |
 | onelevel | bint | (False) | Generate every hierarchical level. Only `Analyse` uses more than one level, if the super clip is only passed to other functions set it to `True` to save memory and a small speedup. |
-| pelclip | clip | (None) | Optional externally-supplied sub-pixel clip instead of generating one internally. |
+| pelclip | vnode | (None) | Optional externally-supplied sub-pixel clip instead of generating one internally. |
 
 > **Porting:** `blksize`/`overlap` were optional in mvtools and are now **mandatory** because the
 > super clip pads itself to make edge blocks valid. `hpad`/`vpad` became `pad=[h, v]`, and `levels`
@@ -154,12 +154,12 @@ core.mvu.Super(clip clip, int[] blksize, int[] overlap[, int[] pad=[16, 16], int
 Estimates a field of motion vectors for one temporal direction/distance.
 
 ```py
-core.mvu.Analyse(clip super[, int[] blksize=<from super>, int[] overlap=<from super>, int levels=0, int search=2, int searchparam=2, int pelsearch=<pel>, int mvlambda=1000, bint chroma=True, int delta=1, int lsad=400, int plevel=1, bint globalmv=True, int pnew=25, int pzero=<pnew>, int pglobal=0, int badsad=10000, int badrange=24, bint meander=True, int trymany=0, bint fields=False, bint tff=False, bint satd=False, str prefix="MVUtensils"])
+core.mvu.Analyse(vnode super[, int[] blksize=<from super>, int[] overlap=<from super>, int levels=0, int search=2, int searchparam=2, int pelsearch=<pel>, int mvlambda=1000, bint chroma=True, int delta=1, int lsad=400, int plevel=1, bint globalmv=True, int pnew=25, int pzero=<pnew>, int pglobal=0, int badsad=10000, int badrange=24, bint meander=True, int trymany=0, bint fields=False, bint tff=False, bint satd=False, str prefix="MVUtensils"])
 ```
 
 | Parameter | Type | Options (Default) | Description |
 | --- | --- | --- | --- |
-| super | clip | (required) | Super clip from `Super` (built with `onelevel=False`). |
+| super | vnode | (required) | Super clip from `Super` (built with `onelevel=False`). |
 | blksize | int[] | (super's value) | Block size `[h, v]`. Smaller = more accurate but slower. |
 | overlap | int[] | (super's value) | Block overlap `[h, v]`, ≤ blksize/2. More overlap = smoother field, slower. |
 | levels | int | (0 = all) | Number of hierarchical levels to use. 0 uses all available. |
@@ -234,7 +234,7 @@ Convenience wrapper that produces the whole list of vector clips `Degrain`, `Flo
 and `FlowBlur` expect, in the right order. Takes every `Analyse` argument plus `radius`.
 
 ```py
-core.mvu.AnalyseMany(clip super[, <all Analyse args>, int delta=1, int radius=1, str prefix="MVUtensils"])
+core.mvu.AnalyseMany(vnode super[, <all Analyse args>, int delta=1, int radius=1, str prefix="MVUtensils"])
 ```
 
 | Parameter | Type | Options (Default) | Description |
@@ -254,7 +254,7 @@ Re-estimates an existing vector field at (typically) a finer block size, refinin
 already have instead of searching from scratch. Pair it with a halved `blksize`/`overlap`.
 
 ```py
-core.mvu.Recalculate(clip super, clip[] vectors[, int thsad=200, bint smooth=True, int[] blksize=<from super>, int search=2, int searchparam=2, int mvlambda=1000, bint chroma=True, int pnew=25, int[] overlap=<from super>, bint meander=True, bint fields=False, bint tff=False, bint satd=False, str prefix="MVUtensils"])
+core.mvu.Recalculate(vnode super, vnode[] vectors[, int thsad=200, bint smooth=True, int[] blksize=<from super>, int search=2, int searchparam=2, int mvlambda=1000, bint chroma=True, int pnew=25, int[] overlap=<from super>, bint meander=True, bint fields=False, bint tff=False, bint satd=False, str prefix="MVUtensils"])
 ```
 
 `vectors` takes a single vector clip or a whole list, and the result is the list of refined clips in
@@ -269,8 +269,8 @@ out = core.mvu.Degrain(clip, super, vectors)
 
 | Parameter | Type | Options (Default) | Description |
 | --- | --- | --- | --- |
-| super | clip | (required) | Super clip. Only one level is needed. |
-| vectors | clip[] | (required) | Vector clip(s) to refine — a single clip or a whole list (e.g. an `AnalyseMany` set). The recalculated clips are returned as a list in the same order. |
+| super | vnode | (required) | Super clip. Only one level is needed. |
+| vectors | vnode[] | (required) | Vector clip(s) to refine — a single clip or a whole list (e.g. an `AnalyseMany` set). The recalculated clips are returned as a list in the same order. |
 | thsad | int | (200) | Blocks whose SAD is below this keep their vector; worse blocks are re-searched. |
 | smooth | bint | (True) | Interpolate the new (finer) vector field from neighbours (True) or take the nearest old vector (False). `smooth=False` roughly matches the old `divide=1` behaviour, `smooth=True` ≈ `divide=2`. |
 | blksize | int[] | (super's value) | Finer block size `[h, v]`. Usually half of the original. |
@@ -303,14 +303,14 @@ from `radius` previous and `radius` following frames, weighted by how well they 
 variants that take the same arguments.
 
 ```py
-core.mvu.Degrain(clip clip, clip super, clip[] vectors[, int[] thsad=[400, 400], int[] planes=[0, 1, 2], float[] limit=[inf, inf], int thscd1=400, float thscd2=51, int[] weights=None, str prefix="MVUtensils"])
+core.mvu.Degrain(vnode clip, vnode super, vnode[] vectors[, int[] thsad=[400, 400], int[] planes=[0, 1, 2], float[] limit=[inf, inf], int thscd1=400, float thscd2=51, int[] weights=None, str prefix="MVUtensils"])
 ```
 
 | Parameter | Type | Options (Default) | Description |
 | --- | --- | --- | --- |
 | clip | 8–16 bit integer or 32 bit float, GRAY/YUV | | Clip to denoise. |
-| super | clip | (required) | Super clip. |
-| vectors | clip[] | (required) | Vector clips in `AnalyseMany` order: `[bw1, fw1, bw2, fw2, …]`. Their count selects the radius. |
+| super | vnode | (required) | Super clip. |
+| vectors | vnode[] | (required) | Vector clips in `AnalyseMany` order: `[bw1, fw1, bw2, fw2, …]`. Their count selects the radius. |
 | thsad | int[] | ([400, 400]) | SAD `[luma, chroma]` at which a reference block's weight reaches zero. Higher = stronger denoising. Chroma defaults to the luma value. |
 | planes | int[] | ([0, 1, 2]) | Which planes to process; unprocessed planes are copied. |
 | limit | float[] | ([inf, inf]) | Maximum absolute change per pixel `[luma, chroma]`. Non-finite (`inf`/`nan`) or a value above the format maximum disables limiting. |
@@ -333,14 +333,14 @@ Builds a single motion-compensated frame: each block is copied from the referenc
 motion vector.
 
 ```py
-core.mvu.Compensate(clip clip, clip super, clip vectors[, int thsad=10000, bint fields=False, float time=100.0, int thscd1=400, float thscd2=51, bint tff=False, str prefix="MVUtensils"])
+core.mvu.Compensate(vnode clip, vnode super, vnode vectors[, int thsad=10000, bint fields=False, float time=100.0, int thscd1=400, float thscd2=51, bint tff=False, str prefix="MVUtensils"])
 ```
 
 | Parameter | Type | Options (Default) | Description |
 | --- | --- | --- | --- |
 | clip | 8–16 bit integer or 32 bit float, GRAY/YUV | | Clip to compensate. |
-| super | clip | (required) | Super clip. |
-| vectors | clip | (required) | A single vector clip (one direction). |
+| super | vnode | (required) | Super clip. |
+| vectors | vnode | (required) | A single vector clip (one direction). |
 | thsad | int | (10000) | Blocks whose SAD exceeds this are taken from the source instead of the compensated reference. |
 | time | float | 0–100 (100.0) | Temporal position of the compensation, as a percentage toward the reference frame. |
 | fields | bint | (False) | Field-based processing. |
@@ -354,14 +354,14 @@ Pixel-accurate motion compensation: instead of copying whole blocks it warps the
 using a per-pixel vector field interpolated from the block vectors.
 
 ```py
-core.mvu.Flow(clip clip, clip super, clip vectors[, float time=100.0, bint fields=False, int thscd1=400, float thscd2=51, bint tff=False, str prefix="MVUtensils"])
+core.mvu.Flow(vnode clip, vnode super, vnode vectors[, float time=100.0, bint fields=False, int thscd1=400, float thscd2=51, bint tff=False, str prefix="MVUtensils"])
 ```
 
 | Parameter | Type | Options (Default) | Description |
 | --- | --- | --- | --- |
 | clip | 8–16 bit integer or 32 bit float, GRAY/YUV | | Clip to warp. |
-| super | clip | (required) | Super clip. |
-| vectors | clip | (required) | A single vector clip. |
+| super | vnode | (required) | Super clip. |
+| vectors | vnode | (required) | A single vector clip. |
 | time | float | 0–100 (100.0) | How far toward the reference frame to warp, in percent. |
 | fields | bint | (False) | Field-based processing. |
 | tff | bint | (False) | Top field first (only relevant with `fields=True`). |
@@ -374,14 +374,14 @@ Interpolates a new frame *between* two existing frames by warping both halves of
 toward the requested time.
 
 ```py
-core.mvu.FlowInter(clip clip, clip super, clip[] vectors[, float time=50.0, float ml=100.0, bint blend=True, int thscd1=400, float thscd2=51, str prefix="MVUtensils"])
+core.mvu.FlowInter(vnode clip, vnode super, vnode[] vectors[, float time=50.0, float ml=100.0, bint blend=True, int thscd1=400, float thscd2=51, str prefix="MVUtensils"])
 ```
 
 | Parameter | Type | Options (Default) | Description |
 | --- | --- | --- | --- |
 | clip | 8–16 bit integer or 32 bit float, GRAY/YUV | | Source clip. |
-| super | clip | (required) | Super clip. |
-| vectors | clip[] | (required) | `[mvbw, mvfw]` (e.g. from `AnalyseMany`). |
+| super | vnode | (required) | Super clip. |
+| vectors | vnode[] | (required) | `[mvbw, mvfw]` (e.g. from `AnalyseMany`). |
 | time | float | 0–100 (50.0) | Position of the interpolated frame between the two source frames (50 = midpoint). |
 | ml | float | (100.0) | Mask scale: the motion length that maps to full occlusion masking. Lower = stronger masking. |
 | blend | bint | (True) | Blend occluded regions instead of hard-selecting one direction. |
@@ -393,14 +393,14 @@ core.mvu.FlowInter(clip clip, clip super, clip[] vectors[, float time=50.0, floa
 Motion-compensated frame-rate conversion, building each output frame with `FlowInter`-style warping.
 
 ```py
-core.mvu.FlowFPS(clip clip, clip super, clip[] vectors[, int num=25, int den=1, bint extramask=True, float ml=100.0, bint blend=True, int thscd1=400, float thscd2=51, str prefix="MVUtensils"])
+core.mvu.FlowFPS(vnode clip, vnode super, vnode[] vectors[, int num=25, int den=1, bint extramask=True, float ml=100.0, bint blend=True, int thscd1=400, float thscd2=51, str prefix="MVUtensils"])
 ```
 
 | Parameter | Type | Options (Default) | Description |
 | --- | --- | --- | --- |
 | clip | 8–16 bit integer or 32 bit float, GRAY/YUV | | Source clip. |
-| super | clip | (required) | Super clip. |
-| vectors | clip[] | (required) | `[mvbw, mvfw]`. |
+| super | vnode | (required) | Super clip. |
+| vectors | vnode[] | (required) | `[mvbw, mvfw]`. |
 | num | int | (25) | Output frame-rate numerator. |
 | den | int | (1) | Output frame-rate denominator. |
 | extramask | bint | (True) | Use a second occlusion-mask pass. `extramask=False` matches the old `mask=1`; `extramask=True` (default) matches `mask=2`. |
@@ -415,14 +415,14 @@ core.mvu.FlowFPS(clip clip, clip super, clip[] vectors[, int num=25, int den=1, 
 Creates motion blur by smearing each pixel along its motion vector.
 
 ```py
-core.mvu.FlowBlur(clip clip, clip super, clip[] vectors[, float blur=50.0, int prec=1, int thscd1=400, float thscd2=51, str prefix="MVUtensils"])
+core.mvu.FlowBlur(vnode clip, vnode super, vnode[] vectors[, float blur=50.0, int prec=1, int thscd1=400, float thscd2=51, str prefix="MVUtensils"])
 ```
 
 | Parameter | Type | Options (Default) | Description |
 | --- | --- | --- | --- |
 | clip | 8–16 bit integer or 32 bit float, GRAY/YUV | | Source clip. |
-| super | clip | (required) | Super clip. |
-| vectors | clip[] | (required) | `[mvbw, mvfw]`. |
+| super | vnode | (required) | Super clip. |
+| vectors | vnode[] | (required) | `[mvbw, mvfw]`. |
 | blur | float | 0–200 (50.0) | Blur strength as a percentage of the motion-vector length. |
 | prec | int | (1) | Sampling step precision along the motion path; lower = more samples = smoother and slower. |
 
@@ -439,14 +439,14 @@ are clamped to 0–1).
 * **OcclusionMask** — brightness proportional to occlusion / divergence of the field (old `kind=2`).
 
 ```py
-core.mvu.VectorLengthMask(clip vectors[, float ml=100.0, float gamma=1.0, float time=100.0, float scval=0.0, int thscd1=400, float thscd2=51, str prefix="MVUtensils"])
-core.mvu.SADMask(clip vectors[, ...same...])
-core.mvu.OcclusionMask(clip vectors[, ...same...])
+core.mvu.VectorLengthMask(vnode vectors[, float ml=100.0, float gamma=1.0, float time=100.0, float scval=0.0, int thscd1=400, float thscd2=51, str prefix="MVUtensils"])
+core.mvu.SADMask(vnode vectors[, ...same...])
+core.mvu.OcclusionMask(vnode vectors[, ...same...])
 ```
 
 | Parameter | Type | Options (Default) | Description |
 | --- | --- | --- | --- |
-| vectors | clip | (required) | Vector clip; its format determines the mask format. |
+| vectors | vnode | (required) | Vector clip; its format determines the mask format. |
 | ml | float | (100.0) | Scale: the motion length / SAD that maps to the maximum mask value. Lower = stronger mask. Must be > 0. |
 | gamma | float | (1.0) | Gamma curve applied to the mask. Must be ≥ 0. |
 | time | float | 0–100 (100.0) | Temporal position used when projecting the vector field. |
@@ -462,13 +462,13 @@ Marks scene-change frames (using the vector clip's SAD statistics) by setting th
 `_SceneChangePrev`/`_SceneChangeNext` frame properties.
 
 ```py
-core.mvu.SCDetection(clip clip, clip vectors[, int thscd1=400, float thscd2=51, str prefix="MVUtensils"])
+core.mvu.SCDetection(vnode clip, vnode vectors[, int thscd1=400, float thscd2=51, str prefix="MVUtensils"])
 ```
 
 | Parameter | Type | Options (Default) | Description |
 | --- | --- | --- | --- |
-| clip | clip | (required) | Clip to tag. |
-| vectors | clip | (required) | Vector clip used for the decision. |
+| clip | vnode | (required) | Clip to tag. |
+| vectors | vnode | (required) | Vector clip used for the decision. |
 
 ## Depan functions
 
@@ -504,7 +504,7 @@ Measures each frame's global motion (pan, optional zoom) directly from the image
 it as frame properties. Outputs a *data* clip for `DepanStabilise`/`DepanCompensate`.
 
 ```py
-core.mvu.DepanEstimate(clip clip[, float trust=4.0, int winx=0, int winy=0, int wleft=-1, int wtop=-1, int dxmax=-1, int dymax=-1, float zoommax=1.0, float stab=1.0, float pixaspect=1.0, bint info=False, bint show=False, bint fields=False, bint tff=False])
+core.mvu.DepanEstimate(vnode clip[, float trust=4.0, int winx=0, int winy=0, int wleft=-1, int wtop=-1, int dxmax=-1, int dymax=-1, float zoommax=1.0, float stab=1.0, float pixaspect=1.0, bint info=False, bint show=False, bint fields=False, bint tff=False])
 ```
 
 | Parameter | Type | Options (Default) | Description |
@@ -527,14 +527,14 @@ Fits a single global transform (pan, optional zoom and rotation) to the per-bloc
 an MVUtensils `vectors` clip, producing the same kind of *data* clip as `DepanEstimate`.
 
 ```py
-core.mvu.DepanAnalyse(clip clip, clip vectors[, clip mask=None, bint zoom=True, bint rot=True, float pixaspect=1.0, float error=15.0, bint info=False, float wrong=10.0, float zerow=0.05, int thscd1=400, float thscd2=51, bint fields=False, bint tff=False])
+core.mvu.DepanAnalyse(vnode clip, vnode vectors[, vnode mask=None, bint zoom=True, bint rot=True, float pixaspect=1.0, float error=15.0, bint info=False, float wrong=10.0, float zerow=0.05, int thscd1=400, float thscd2=51, bint fields=False, bint tff=False])
 ```
 
 | Parameter | Type | Options (Default) | Description |
 | --- | --- | --- | --- |
 | clip | 8–16 bit integer, GRAY/YUV | | Source clip (passed through; carries the data). |
-| vectors | clip | (required) | MVUtensils vector clip whose block vectors are fitted. |
-| mask | clip | (None) | Optional mask selecting which regions of the field to trust. |
+| vectors | vnode | (required) | MVUtensils vector clip whose block vectors are fitted. |
+| mask | vnode | (None) | Optional mask selecting which regions of the field to trust. |
 | zoom | bint | (True) | Also estimate global zoom. |
 | rot | bint | (True) | Also estimate global rotation. |
 | pixaspect | float | (1.0) | Pixel aspect ratio. |
@@ -551,13 +551,13 @@ the inverse transform to remove camera shake while preserving intentional motion
 stabilised video.
 
 ```py
-core.mvu.DepanStabilise(clip clip, clip data[, float cutoff=1.0, float damping=0.9, float initzoom=1.0, bint addzoom=False, int prev=0, int next=0, int mirror=0, int blur=0, float dxmax=60.0, float dymax=30.0, float zoommax=1.05, float rotmax=1.0, int subpixel=2, float pixaspect=1.0, int fitlast=0, float tzoom=3.0, bint info=False, int method=0, bint fields=False])
+core.mvu.DepanStabilise(vnode clip, vnode data[, float cutoff=1.0, float damping=0.9, float initzoom=1.0, bint addzoom=False, int prev=0, int next=0, int mirror=0, int blur=0, float dxmax=60.0, float dymax=30.0, float zoommax=1.05, float rotmax=1.0, int subpixel=2, float pixaspect=1.0, int fitlast=0, float tzoom=3.0, bint info=False, int method=0, bint fields=False])
 ```
 
 | Parameter | Type | Options (Default) | Description |
 | --- | --- | --- | --- |
 | clip | 8–16 bit integer, GRAY/YUV | | Clip to stabilise. |
-| data | clip | (required) | Global-motion data from `DepanEstimate`/`DepanAnalyse`. |
+| data | vnode | (required) | Global-motion data from `DepanEstimate`/`DepanAnalyse`. |
 | cutoff | float | (1.0) | Cutoff frequency (Hz) of the stabilisation filter; lower = smoother, slower correction. |
 | damping | float | (0.9) | Damping ratio of the filter. |
 | initzoom | float | (1.0) | Constant zoom applied to help hide exposed borders. |
@@ -582,13 +582,13 @@ Warps each frame by the global motion in a `data` clip (scaled by `offset`) — 
 or reproduce a camera move, or to align frames. Outputs the warped video.
 
 ```py
-core.mvu.DepanCompensate(clip clip, clip data[, float offset=0.0, int subpixel=2, float pixaspect=1.0, bint matchfields=True, int mirror=0, int blur=0, bint info=False, bint fields=False, bint tff=False])
+core.mvu.DepanCompensate(vnode clip, vnode data[, float offset=0.0, int subpixel=2, float pixaspect=1.0, bint matchfields=True, int mirror=0, int blur=0, bint info=False, bint fields=False, bint tff=False])
 ```
 
 | Parameter | Type | Options (Default) | Description |
 | --- | --- | --- | --- |
 | clip | 8–16 bit integer, GRAY/YUV | | Clip to warp. |
-| data | clip | (required) | Global-motion data from `DepanEstimate`/`DepanAnalyse`. |
+| data | vnode | (required) | Global-motion data from `DepanEstimate`/`DepanAnalyse`. |
 | offset | float | (0.0) | Temporal offset/scale of the motion to apply; 0 = none, fractional values compensate by a fraction of the move. |
 | subpixel | int | 0–2 (2) | Subpixel interpolation: 0=none, 1=bilinear, 2=bicubic. |
 | pixaspect | float | (1.0) | Pixel aspect ratio. |
