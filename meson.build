@@ -100,7 +100,7 @@ if host_machine.cpu_family() == 'x86_64'
     variants = [
         { 'name': 'mvutensils',        'tag': 'baseline', 'level': 0 },
         { 'name': 'mvutensils.avx2',   'tag': 'avx2',     'level': 1 },
-        { 'name': 'mvutensils.znver4', 'tag': 'znver4',   'level': 3 },
+        { 'name': 'mvutensils.zn4',    'tag': 'znver4',   'level': 3 },
     ]
 
     foreach v : variants
