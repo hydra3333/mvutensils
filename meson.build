@@ -85,10 +85,10 @@ if host_machine.cpu_family() == 'x86_64'
     # -mprefer-vector-width=512 and -ffast-math are orthogonal tuning flags and kept on their TUs in
     # every variant.
     march_levels = {
-        '0': [],                               # baseline (generic x86-64, SSE2)
-        '1': ['-march=x86-64-v3'],             # AVX2
-        '2': ['-march=x86-64-v4'],             # AVX-512
-        '3': ['-march=znver4', '-mno-sse4a'],  # Zen4 whole-program, highest level
+        '0': [],                                                     # baseline (generic x86-64, SSE2)
+        '1': ['-march=x86-64-v3'],                                   # AVX2
+        '2': ['-march=x86-64-v4'],                                   # AVX-512
+        '3': ['-march=znver4', '-mno-sse4a', ', '-mno-avx512bf16'],  # Zen4 whole-program, highest level
     }
     avx2_min_level = 1
     avx512_min_level = 2
