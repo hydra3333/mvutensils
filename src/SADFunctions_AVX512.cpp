@@ -69,6 +69,80 @@ struct SADWrapperU16_AVX512 {
 };
 
 
+// 16-bit SAD via AVX-512 VNNI (vpdpwssd). Full-16-bit correct via a bias trick: the abs-diff
+// or(subs_epu16(a,b),subs_epu16(b,a)) is UNSIGNED [0,65535] which overflows the signed word vpdpwssd
+// wants, so XOR 0x8000 maps it to signed [-32768,32767] (== ad-32768); vpdpwssd(.,+1) then fuses
+// widen+pair-sum+accumulate into int32, and the compile-time constant 32768*W*H is added back at the
+// end. ~1.25-1.5x over the plain kernel for widths 8..64 (see bench_degrain/sad16_vnni*_bench.cpp).
+// 4 row-interleaved accumulators hide vpdpwssd's ~5c latency. Requires H % 4 == 0 (all registered).
+// clang-cl's /arch:AVX512 is only x86-64-v4 (no VNNI), so the kernel opts into VNNI with a function
+// target attribute; MSVC's /arch:AVX512 is a broad umbrella that already exposes the VNNI intrinsics
+// (and rejects __attribute__), so the attribute is clang-only. Runtime-gated on MVU_CPU_AVX512VNNI.
+#if defined(__clang__)
+#define MVU_TARGET_VNNI __attribute__((target("avx512vnni,avx512bw,avx512vl")))
+#else
+#define MVU_TARGET_VNNI
+#endif
+template <unsigned W, unsigned H>
+MVU_TARGET_VNNI
+static unsigned int sad_u16_avx512_vnni(const uint8_t *pSrc8, intptr_t nSrcPitch, const uint8_t *pRef8, intptr_t nRefPitch) noexcept {
+    static_assert(W >= 8 && H % 4 == 0, "VNNI SAD: width >= 8, processes 4 rows per iteration");
+    const uint32_t correction = 32768u * W * H;
+    if constexpr (W >= 32) { // 512-bit, 32 words/vector, 4 row-interleaved accumulators
+        const __m512i ones = _mm512_set1_epi16(1), bias = _mm512_set1_epi16((short)0x8000);
+        __m512i a0 = _mm512_setzero_si512(), a1 = a0, a2 = a0, a3 = a0;
+        for (unsigned y = 0; y < H; y += 4) {
+            const uint16_t *s0 = (const uint16_t *)(pSrc8), *s1 = (const uint16_t *)(pSrc8 + nSrcPitch),
+                           *s2 = (const uint16_t *)(pSrc8 + 2 * nSrcPitch), *s3 = (const uint16_t *)(pSrc8 + 3 * nSrcPitch);
+            const uint16_t *r0 = (const uint16_t *)(pRef8), *r1 = (const uint16_t *)(pRef8 + nRefPitch),
+                           *r2 = (const uint16_t *)(pRef8 + 2 * nRefPitch), *r3 = (const uint16_t *)(pRef8 + 3 * nRefPitch);
+            for (unsigned x = 0; x < W; x += 32) {
+                __m512i A0 = _mm512_loadu_si512(s0 + x), B0 = _mm512_loadu_si512(r0 + x);
+                a0 = _mm512_dpwssd_epi32(a0, _mm512_xor_si512(_mm512_or_si512(_mm512_subs_epu16(A0, B0), _mm512_subs_epu16(B0, A0)), bias), ones);
+                __m512i A1 = _mm512_loadu_si512(s1 + x), B1 = _mm512_loadu_si512(r1 + x);
+                a1 = _mm512_dpwssd_epi32(a1, _mm512_xor_si512(_mm512_or_si512(_mm512_subs_epu16(A1, B1), _mm512_subs_epu16(B1, A1)), bias), ones);
+                __m512i A2 = _mm512_loadu_si512(s2 + x), B2 = _mm512_loadu_si512(r2 + x);
+                a2 = _mm512_dpwssd_epi32(a2, _mm512_xor_si512(_mm512_or_si512(_mm512_subs_epu16(A2, B2), _mm512_subs_epu16(B2, A2)), bias), ones);
+                __m512i A3 = _mm512_loadu_si512(s3 + x), B3 = _mm512_loadu_si512(r3 + x);
+                a3 = _mm512_dpwssd_epi32(a3, _mm512_xor_si512(_mm512_or_si512(_mm512_subs_epu16(A3, B3), _mm512_subs_epu16(B3, A3)), bias), ones);
+            }
+            pSrc8 += 4 * nSrcPitch; pRef8 += 4 * nRefPitch;
+        }
+        __m512i acc = _mm512_add_epi32(_mm512_add_epi32(a0, a1), _mm512_add_epi32(a2, a3));
+        return (unsigned)((uint32_t)_mm512_reduce_add_epi32(acc) + correction);
+    } else if constexpr (W == 16) { // 512-bit, 2 rows per zmm, 2 accumulators
+        const __m512i ones = _mm512_set1_epi16(1), bias = _mm512_set1_epi16((short)0x8000);
+        __m512i a0 = _mm512_setzero_si512(), a1 = a0;
+        for (unsigned y = 0; y < H; y += 4) {
+            __m512i S0 = _mm512_inserti64x4(_mm512_castsi256_si512(_mm256_loadu_si256((const __m256i *)(pSrc8))), _mm256_loadu_si256((const __m256i *)(pSrc8 + nSrcPitch)), 1);
+            __m512i R0 = _mm512_inserti64x4(_mm512_castsi256_si512(_mm256_loadu_si256((const __m256i *)(pRef8))), _mm256_loadu_si256((const __m256i *)(pRef8 + nRefPitch)), 1);
+            a0 = _mm512_dpwssd_epi32(a0, _mm512_xor_si512(_mm512_or_si512(_mm512_subs_epu16(S0, R0), _mm512_subs_epu16(R0, S0)), bias), ones);
+            __m512i S1 = _mm512_inserti64x4(_mm512_castsi256_si512(_mm256_loadu_si256((const __m256i *)(pSrc8 + 2 * nSrcPitch))), _mm256_loadu_si256((const __m256i *)(pSrc8 + 3 * nSrcPitch)), 1);
+            __m512i R1 = _mm512_inserti64x4(_mm512_castsi256_si512(_mm256_loadu_si256((const __m256i *)(pRef8 + 2 * nRefPitch))), _mm256_loadu_si256((const __m256i *)(pRef8 + 3 * nRefPitch)), 1);
+            a1 = _mm512_dpwssd_epi32(a1, _mm512_xor_si512(_mm512_or_si512(_mm512_subs_epu16(S1, R1), _mm512_subs_epu16(R1, S1)), bias), ones);
+            pSrc8 += 4 * nSrcPitch; pRef8 += 4 * nRefPitch;
+        }
+        return (unsigned)((uint32_t)_mm512_reduce_add_epi32(_mm512_add_epi32(a0, a1)) + correction);
+    } else { // W == 8 : 256-bit, 2 rows per ymm, 2 accumulators
+        const __m256i ones = _mm256_set1_epi16(1), bias = _mm256_set1_epi16((short)0x8000);
+        __m256i a0 = _mm256_setzero_si256(), a1 = a0;
+        for (unsigned y = 0; y < H; y += 4) {
+            __m256i S0 = _mm256_inserti128_si256(_mm256_castsi128_si256(_mm_loadu_si128((const __m128i *)(pSrc8))), _mm_loadu_si128((const __m128i *)(pSrc8 + nSrcPitch)), 1);
+            __m256i R0 = _mm256_inserti128_si256(_mm256_castsi128_si256(_mm_loadu_si128((const __m128i *)(pRef8))), _mm_loadu_si128((const __m128i *)(pRef8 + nRefPitch)), 1);
+            a0 = _mm256_dpwssd_epi32(a0, _mm256_xor_si256(_mm256_or_si256(_mm256_subs_epu16(S0, R0), _mm256_subs_epu16(R0, S0)), bias), ones);
+            __m256i S1 = _mm256_inserti128_si256(_mm256_castsi128_si256(_mm_loadu_si128((const __m128i *)(pSrc8 + 2 * nSrcPitch))), _mm_loadu_si128((const __m128i *)(pSrc8 + 3 * nSrcPitch)), 1);
+            __m256i R1 = _mm256_inserti128_si256(_mm256_castsi128_si256(_mm_loadu_si128((const __m128i *)(pRef8 + 2 * nRefPitch))), _mm_loadu_si128((const __m128i *)(pRef8 + 3 * nRefPitch)), 1);
+            a1 = _mm256_dpwssd_epi32(a1, _mm256_xor_si256(_mm256_or_si256(_mm256_subs_epu16(S1, R1), _mm256_subs_epu16(R1, S1)), bias), ones);
+            pSrc8 += 4 * nSrcPitch; pRef8 += 4 * nRefPitch;
+        }
+        __m256i acc = _mm256_add_epi32(a0, a1);
+        __m128i s = _mm_add_epi32(_mm256_castsi256_si128(acc), _mm256_extracti128_si256(acc, 1));
+        s = _mm_add_epi32(s, _mm_shuffle_epi32(s, _MM_SHUFFLE(1, 0, 3, 2)));
+        s = _mm_add_epi32(s, _mm_shuffle_epi32(s, _MM_SHUFFLE(2, 3, 0, 1)));
+        return (unsigned)((uint32_t)_mm_cvtsi128_si32(s) + correction);
+    }
+}
+
 // ===================== SATD (Hadamard) =====================
 // 16x4 tile of 16-bit pixels = four 4x4 sub-blocks (one per zmm 128-lane); direct widening of the AVX2
 // 8x4 core (the unpack-based 4x4 transpose is per-128-lane, so the ymm logic replicates to all 4 lanes).
@@ -181,6 +255,24 @@ static const std::unordered_map<uint32_t, SADFunction> satd_functions = {
 void selectSADFunctionAVX512(unsigned width, unsigned height, unsigned bits, SADFunction &sad) {
     auto it = sad_functions.find(KEY(width, height, bits));
     if (it != sad_functions.end())
+        sad = it->second;
+}
+
+// 16-bit VNNI SAD: only the sizes where the vpdpwssd bias kernel beats the plain AVX-512 kernel
+// (widths 8-64, height >= 8; 4x4/8x4 were ~parity, 128-wide regressed -- bench_degrain/sad16_vnni*).
+#define SAD_U16_AVX512_VNNI(width, height) { KEY(width, height, 16), sad_u16_avx512_vnni<width, height> },
+static const std::unordered_map<uint32_t, SADFunction> sad_vnni_functions = {
+    SAD_U16_AVX512_VNNI(8, 8)  SAD_U16_AVX512_VNNI(8, 16)  SAD_U16_AVX512_VNNI(8, 32)
+    SAD_U16_AVX512_VNNI(16, 8) SAD_U16_AVX512_VNNI(16, 16) SAD_U16_AVX512_VNNI(16, 32)
+    SAD_U16_AVX512_VNNI(32, 8) SAD_U16_AVX512_VNNI(32, 16) SAD_U16_AVX512_VNNI(32, 32) SAD_U16_AVX512_VNNI(32, 64)
+    SAD_U16_AVX512_VNNI(64, 16) SAD_U16_AVX512_VNNI(64, 32) SAD_U16_AVX512_VNNI(64, 64) SAD_U16_AVX512_VNNI(64, 128)
+};
+
+void selectSADFunctionAVX512VNNI(unsigned width, unsigned height, unsigned bits, SADFunction &sad) {
+    if (bits != 16)
+        return;
+    auto it = sad_vnni_functions.find(KEY(width, height, bits));
+    if (it != sad_vnni_functions.end())
         sad = it->second;
 }
 

@@ -331,6 +331,8 @@ SADFunction selectSADFunction(unsigned width, unsigned height, unsigned bits) {
         selectSADFunctionAVX2(width, height, bits, sad);
     if (g_cpuinfo & MVU_CPU_AVX512_BASE)
         selectSADFunctionAVX512(width, height, bits, sad);
+    if (g_cpuinfo & MVU_CPU_AVX512VNNI)
+        selectSADFunctionAVX512VNNI(width, height, bits, sad); // 16-bit only, beats the base kernel at W 8-64
 #endif
 
     return sad;

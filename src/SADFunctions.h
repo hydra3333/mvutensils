@@ -43,4 +43,7 @@ void selectSADFunctionAVX2(unsigned width, unsigned height, unsigned bits, SADFu
 void selectSATDFunctionAVX2(unsigned width, unsigned height, unsigned bits, SADFunction &satd);
 void selectSADFunctionAVX512(unsigned width, unsigned height, unsigned bits, SADFunction &sad);
 void selectSATDFunctionAVX512(unsigned width, unsigned height, unsigned bits, SADFunction &satd);
+// AVX-512 VNNI 16-bit SAD (vpdpwssd bias trick). Full-16-bit correct; only the sizes where it beats
+// the plain AVX-512 kernel (widths 8-64, not 128/4, height >= 8) are registered.
+void selectSADFunctionAVX512VNNI(unsigned width, unsigned height, unsigned bits, SADFunction &sad);
 #endif
