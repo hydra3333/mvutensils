@@ -78,8 +78,21 @@ struct SADWrapperU16_AVX512 {
 // clang-cl's /arch:AVX512 is only x86-64-v4 (no VNNI), so the kernel opts into VNNI with a function
 // target attribute; MSVC's /arch:AVX512 is a broad umbrella that already exposes the VNNI intrinsics
 // (and rejects __attribute__), so the attribute is clang-only. Runtime-gated on MVU_CPU_AVX512VNNI.
+// clang and GCC both compile this TU at x86-64-v4 (-march / clang-cl /arch:AVX512), which lacks VNNI,
+// so the kernel opts VNNI in with a function target attribute. Both compilers ADD these to the v4
+// baseline (which already has avx512f/bw/vl), so only the *added* features are listed -- listing
+// avx512f explicitly trips a clang feature-resolution bug on the 256-bit _mm256_dpwssd path. MSVC
+// cl.exe rejects __attribute__ but its /arch:AVX512 umbrella already exposes VNNI, so it's attribute-free.
+// The TU is x86-64-v4 (clang-cl /arch:AVX512, GCC -march=x86-64-v4) which lacks VNNI, so opt it in per
+// function. clang-cl defines __clang__ (not __GNUC__); GCC defines __GNUC__ (not __clang__). The lists
+// differ by compiler: on clang, listing avx512f explicitly trips a bug that then rejects the 256-bit
+// _mm256_dpwssd, so only the added feature + its 256/128 companions are listed (clang keeps avx512f
+// from the baseline). GCC needs the full set spelled out (its attribute can reset the feature set).
+// MSVC cl.exe (neither macro) needs nothing -- its /arch:AVX512 umbrella already exposes VNNI.
 #if defined(__clang__)
 #define MVU_TARGET_VNNI __attribute__((target("avx512vnni,avx512bw,avx512vl")))
+#elif defined(__GNUC__)
+#define MVU_TARGET_VNNI __attribute__((target("avx512f,avx512bw,avx512vl,avx512vnni")))
 #else
 #define MVU_TARGET_VNNI
 #endif
