@@ -161,8 +161,15 @@ static void VS_CC analyseCreate(const VSMap *in, VSMap *out, [[maybe_unused]] vo
         d->nLambda = vsapi->mapGetInt(in, "mvlambda", 0, &err);
         if (err)
             d->nLambda = 1000;
+        if (d->nLambda < 0)
+            throw std::runtime_error("mvlambda must be non-negative");
 
-        d->nLambda *= (d->nBlkSizeX *d->nBlkSizeY / 64);
+        // Scale by the block area relative to the 8x8 reference. nLambda is user-supplied and the scale
+        // reaches 256 at 128x128, so guard the multiply against int64 overflow before performing it.
+        const int64_t lambdaScale = d->nBlkSizeX * d->nBlkSizeY / 64;
+        if (lambdaScale != 0 && d->nLambda > INT64_MAX / lambdaScale)
+            throw std::runtime_error("mvlambda is too large for this block size (would overflow)");
+        d->nLambda *= lambdaScale;
 
         d->lsad = vsapi->mapGetIntSaturated(in, "lsad", 0, &err);
         if (err)
