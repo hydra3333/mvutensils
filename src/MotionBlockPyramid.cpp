@@ -771,8 +771,8 @@ void MotionBlockLevel::PseudoEPZSearch(int blkIdx, int blkx, int blky, int blkSc
 
     int64_t sad = SAD(pSrc_temp[0], nSrcPitch_temp[0], GetRefBlock<nLogPel, PixelType>(0, zeroMVfieldShifted.y), nRefPitch[0]);
     if (chroma) {
-        sad += SADCHROMA(pSrc_temp[1], nSrcPitch_temp[1], GetRefBlockU<nLogPel, PixelType>(0, 0), nRefPitch[1]);
-        sad += SADCHROMA(pSrc_temp[2], nSrcPitch_temp[2], GetRefBlockV<nLogPel, PixelType>(0, 0), nRefPitch[2]);
+        sad += SADCHROMA(pSrc_temp[1], nSrcPitch_temp[1], GetRefBlockU<nLogPel, PixelType>(0, zeroMVfieldShifted.y), nRefPitch[1]);
+        sad += SADCHROMA(pSrc_temp[2], nSrcPitch_temp[2], GetRefBlockV<nLogPel, PixelType>(0, zeroMVfieldShifted.y), nRefPitch[2]);
     }
     bestMV.sad = sad;
     nMinCost = sad + ((penaltyZero * sad) >> 8); // v.1.11.0.2
