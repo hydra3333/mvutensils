@@ -564,7 +564,7 @@ static void VS_CC degrainCreate(const VSMap *in, VSMap *out, [[maybe_unused]] vo
         d->thSAD[2] = d->thSAD[1];
 
         if (d->thSAD[0] >= std::numeric_limits<int>::max() || d->thSAD[1] >= std::numeric_limits<int>::max()) {
-            int64_t maximum = static_cast<int64_t>(std::numeric_limits<int>::max() * thscdScale + .5);
+            int64_t maximum = static_cast<int64_t>((std::numeric_limits<int>::max() - 1) / thscdScale);
 
             bool c = d->thSAD[0] < std::numeric_limits<int>::max();
 
