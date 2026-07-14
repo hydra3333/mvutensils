@@ -107,19 +107,22 @@ static void frame_data2d(const uint8_t *srcp, ptrdiff_t pitch, float * MVU_RESTR
 static void mult_conj_data2d(const fftwf_complex * MVU_RESTRICT fftnext, const fftwf_complex * MVU_RESTRICT fftsrc, fftwf_complex * MVU_RESTRICT mult, int winx, int winy) {
     // multiply complex conj. *next to src
     // (hermit)
-    int nx = winx / 2 + 1; //half-complex row width, odd
+    int nx = winx / 2 + 1; // half-complex row width
 
-    int total = winy * nx;                                                                            // even
-    for (int k = 0; k < total; k += 2) { //paired for speed
+    int total = winy * nx; // may be odd (odd winy with a winx divisible by 4), so the buffer holds an odd count
+
+    auto conjMul = [&](int k) {
         // real part
         mult[k][0] = fftnext[k][0] * fftsrc[k][0] + fftnext[k][1] * fftsrc[k][1];
         // imaginary part
         mult[k][1] = fftnext[k][0] * fftsrc[k][1] - fftnext[k][1] * fftsrc[k][0];
-        // real part
-        mult[k + 1][0] = fftnext[k + 1][0] * fftsrc[k + 1][0] + fftnext[k + 1][1] * fftsrc[k + 1][1];
-        // imaginary part
-        mult[k + 1][1] = fftnext[k + 1][0] * fftsrc[k + 1][1] - fftnext[k + 1][1] * fftsrc[k + 1][0];
-    }
+    };
+
+    int k = 0;
+    for (; k + 1 < total; k += 2) // paired for speed; guard so k + 1 never runs past the buffer
+        conjMul(k), conjMul(k + 1);
+    if (k < total) // odd total: process the trailing element on its own
+        conjMul(k);
 }
 
 
@@ -709,6 +712,11 @@ static void VS_CC depanEstimateCreate(const VSMap *in, VSMap *out, [[maybe_unuse
 
         if (data1->zoommax != 1.0f) {
             data1->winx = data1->winx / 2; // devide window x by 2 part (left and right)
+            // The even check above ran on the pre-halved winx; halving an even winx yields an odd one
+            // (e.g. 66 -> 33) unless the original was divisible by 4. An odd winx overreads the source
+            // by one column in frame_data2d's i+=2 loop, so reject it here.
+            if (data1->winx & 1)
+                throw std::runtime_error("with zoommax != 1, winx must be divisible by 4 (it is halved for the left/right zoom windows)");
             if (wleft0 < 0)
                 data1->wleft = (data1->vi->width - data1->winx * 2) / 4;
         } else if (wleft0 < 0)
