@@ -524,21 +524,40 @@ static void HorizontalBicubic(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RE
 }
 
 template <typename PixelType>
-static void Average2(uint8_t *MVU_RESTRICT pDst8, const uint8_t *MVU_RESTRICT pSrc18, const uint8_t *MVU_RESTRICT pSrc28,
-    ptrdiff_t nPitch, int nWidth, int nHeight) noexcept {
-    PixelType *pDst = (PixelType *)pDst8;
-    const PixelType *pSrc1 = (const PixelType *)pSrc18;
-    const PixelType *pSrc2 = (const PixelType *)pSrc28;
+static void GeneratePelQuarters(uint8_t *MVU_RESTRICT const P[16], ptrdiff_t nPitch, int nWidth, int nHeight) noexcept {
+    const ptrdiff_t pp = nPitch / static_cast<ptrdiff_t>(sizeof(PixelType));
+    auto row = [&](int i, int y) { return reinterpret_cast<PixelType *>(P[i] + static_cast<size_t>(y) * nPitch); };
 
-    nPitch /= sizeof(PixelType);
+    for (int y = 0; y < nHeight; y++) {
+        const PixelType *p0 = row(0, y), *p2 = row(2, y), *p8 = row(8, y), *p10 = row(10, y);
+        PixelType *d1 = row(1, y), *d9 = row(9, y), *d4 = row(4, y), *d6 = row(6, y);
+        PixelType *d5 = row(5, y), *d3 = row(3, y), *d11 = row(11, y), *d7 = row(7, y);
+        PixelType *d12 = row(12, y), *d14 = row(14, y), *d13 = row(13, y), *d15 = row(15, y);
 
-    for (int j = 0; j < nHeight; j++) {
-        for (int i = 0; i < nWidth; i++)
-            pDst[i] = AveragePixels(pSrc1[i], pSrc2[i]);
-
-        pDst += nPitch;
-        pSrc1 += nPitch;
-        pSrc2 += nPitch;
+        for (int x = 0; x < nWidth; x++) {
+            d1[x] = AveragePixels(p0[x], p2[x]);
+            d9[x] = AveragePixels(p8[x], p10[x]);
+            d4[x] = AveragePixels(p0[x], p8[x]);
+            d6[x] = AveragePixels(p2[x], p10[x]);
+        }
+        for (int x = 0; x < nWidth; x++)
+            d5[x] = AveragePixels(d4[x], d6[x]);
+        for (int x = 0; x < nWidth - 1; x++) {
+            d3[x] = AveragePixels(p0[x + 1], p2[x]);
+            d11[x] = AveragePixels(p8[x + 1], p10[x]);
+            d7[x] = AveragePixels(d4[x + 1], d6[x]);
+        }
+        if (y < nHeight - 1) {
+            const PixelType *p0n = p0 + pp, *p2n = p2 + pp;
+            for (int x = 0; x < nWidth; x++) {
+                d12[x] = AveragePixels(p0n[x], p8[x]);
+                d14[x] = AveragePixels(p2n[x], p10[x]);
+            }
+        }
+        for (int x = 0; x < nWidth; x++)
+            d13[x] = AveragePixels(d12[x], d14[x]);
+        for (int x = 0; x < nWidth - 1; x++)
+            d15[x] = AveragePixels(d12[x + 1], d14[x]);
     }
 }
 
@@ -595,20 +614,7 @@ void PyramidPlane::GeneratePelPlanes(SharpParam sharp, const VSAPI *vsapi) noexc
         for (int i = 0; i < 3; i++)
             refine[i](dst[i], src[i], nPitch, nPaddedWidth, nPaddedHeight, format->bitsPerSample);
 
-        // now interpolate intermediate
-        Average2<PixelType>(pPlaneW[1], pPlane[0], pPlane[2], nPitch, nPaddedWidth, nPaddedHeight);
-        Average2<PixelType>(pPlaneW[9], pPlane[8], pPlane[10], nPitch, nPaddedWidth, nPaddedHeight);
-        Average2<PixelType>(pPlaneW[4], pPlane[0], pPlane[8], nPitch, nPaddedWidth, nPaddedHeight);
-        Average2<PixelType>(pPlaneW[6], pPlane[2], pPlane[10], nPitch, nPaddedWidth, nPaddedHeight);
-        Average2<PixelType>(pPlaneW[5], pPlane[4], pPlane[6], nPitch, nPaddedWidth, nPaddedHeight);
-
-        Average2<PixelType>(pPlaneW[3], pPlane[0] + sizeof(PixelType), pPlane[2], nPitch, nPaddedWidth - 1, nPaddedHeight);
-        Average2<PixelType>(pPlaneW[11], pPlane[8] + sizeof(PixelType), pPlane[10], nPitch, nPaddedWidth - 1, nPaddedHeight);
-        Average2<PixelType>(pPlaneW[12], pPlane[0] + nPitch, pPlane[8], nPitch, nPaddedWidth, nPaddedHeight - 1);
-        Average2<PixelType>(pPlaneW[14], pPlane[2] + nPitch, pPlane[10], nPitch, nPaddedWidth, nPaddedHeight - 1);
-        Average2<PixelType>(pPlaneW[13], pPlane[12], pPlane[14], nPitch, nPaddedWidth, nPaddedHeight);
-        Average2<PixelType>(pPlaneW[7], pPlane[4] + sizeof(PixelType), pPlane[6], nPitch, nPaddedWidth - 1, nPaddedHeight);
-        Average2<PixelType>(pPlaneW[15], pPlane[12] + sizeof(PixelType), pPlane[14], nPitch, nPaddedWidth - 1, nPaddedHeight);
+        GeneratePelQuarters<PixelType>(pPlaneW, nPitch, nPaddedWidth, nPaddedHeight);
     }
 
     nVPaddingPel = nVPadding * nPel;
