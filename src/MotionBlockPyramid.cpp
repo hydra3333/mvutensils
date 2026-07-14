@@ -769,13 +769,19 @@ void MotionBlockLevel::PseudoEPZSearch(int blkIdx, int blkx, int blky, int blkSc
     bestMV.x = zeroMVfieldShifted.x;
     bestMV.y = zeroMVfieldShifted.y;
 
-    int64_t sad = SAD(pSrc_temp[0], nSrcPitch_temp[0], GetRefBlock<nLogPel, PixelType>(0, zeroMVfieldShifted.y), nRefPitch[0]);
-    if (chroma) {
-        sad += SADCHROMA(pSrc_temp[1], nSrcPitch_temp[1], GetRefBlockU<nLogPel, PixelType>(0, zeroMVfieldShifted.y), nRefPitch[1]);
-        sad += SADCHROMA(pSrc_temp[2], nSrcPitch_temp[2], GetRefBlockV<nLogPel, PixelType>(0, zeroMVfieldShifted.y), nRefPitch[2]);
-    }
-    bestMV.sad = sad;
-    nMinCost = sad + ((penaltyZero * sad) >> 8); // v.1.11.0.2
+    auto rawSad = [&](int mvx, int mvy) noexcept -> int64_t {
+        int64_t s = SAD(pSrc_temp[0], nSrcPitch_temp[0], GetRefBlock<nLogPel, PixelType>(mvx, mvy), nRefPitch[0]);
+        if (chroma) {
+            s += SADCHROMA(pSrc_temp[1], nSrcPitch_temp[1], GetRefBlockU<nLogPel, PixelType>(mvx, mvy), nRefPitch[1]);
+            s += SADCHROMA(pSrc_temp[2], nSrcPitch_temp[2], GetRefBlockV<nLogPel, PixelType>(mvx, mvy), nRefPitch[2]);
+        }
+        return s;
+    };
+
+    // Zero vector
+    int64_t sadZero = rawSad(zeroMVfieldShifted.x, zeroMVfieldShifted.y);
+    bestMV.sad = sadZero;
+    nMinCost = sadZero + ((penaltyZero * sadZero) >> 8); // v.1.11.0.2
 
     VECTOR bestMVMany[8];
     int64_t nMinCostMany[8] = { 0 };
@@ -787,19 +793,17 @@ void MotionBlockLevel::PseudoEPZSearch(int blkIdx, int blkx, int blky, int blkSc
         nMinCostMany[0] = nMinCost;
     }
 
-    // Global MV predictor
+    // Global MV predictor (reuse zero's SAD if it clips to the same position)
     globalMVPredictor = ClipMV(globalMVPredictor);
-    sad = SAD(pSrc_temp[0], nSrcPitch_temp[0], GetRefBlock<nLogPel, PixelType>(globalMVPredictor.x, globalMVPredictor.y), nRefPitch[0]);
-    if (chroma) {
-        sad += SADCHROMA(pSrc_temp[1], nSrcPitch_temp[1], GetRefBlockU<nLogPel, PixelType>(globalMVPredictor.x, globalMVPredictor.y), nRefPitch[1]);
-        sad += SADCHROMA(pSrc_temp[2], nSrcPitch_temp[2], GetRefBlockV<nLogPel, PixelType>(globalMVPredictor.x, globalMVPredictor.y), nRefPitch[2]);
-    }
-    int64_t cost = sad + ((pglobal * sad) >> 8);
+    int64_t sadGlobal = (globalMVPredictor.x == zeroMVfieldShifted.x && globalMVPredictor.y == zeroMVfieldShifted.y)
+        ? sadZero
+        : rawSad(globalMVPredictor.x, globalMVPredictor.y);
+    int64_t cost = sadGlobal + ((pglobal * sadGlobal) >> 8);
 
     if (cost < nMinCost || tryMany) {
         bestMV.x = globalMVPredictor.x;
         bestMV.y = globalMVPredictor.y;
-        bestMV.sad = sad;
+        bestMV.sad = sadGlobal;
         nMinCost = cost;
     }
     if (tryMany) {
@@ -811,22 +815,16 @@ void MotionBlockLevel::PseudoEPZSearch(int blkIdx, int blkx, int blky, int blkSc
 
     VECTOR predictors[4]; /* set of predictors for the current block */
     FetchPredictors(blkIdx, blkx, blky, blkScanDir, predictors);
-    const uint8_t *predBlocks[3] = {
-        GetRefBlock<nLogPel, PixelType>(predictor.x, predictor.y),
-        chroma ? GetRefBlockU<nLogPel, PixelType>(predictor.x, predictor.y) : nullptr,
-        chroma ? GetRefBlockV<nLogPel, PixelType>(predictor.x, predictor.y) : nullptr,
-    };
-    sad = SAD(pSrc_temp[0], nSrcPitch_temp[0], predBlocks[0], nRefPitch[0]);
-    if (chroma) {
-        sad += SADCHROMA(pSrc_temp[1], nSrcPitch_temp[1], predBlocks[1], nRefPitch[1]);
-        sad += SADCHROMA(pSrc_temp[2], nSrcPitch_temp[2], predBlocks[2], nRefPitch[2]);
-    }
-    cost = sad;
+    // Median/parent predictor (reuse zero's or global's SAD when it coincides with either)
+    int64_t sadPred = (predictor.x == zeroMVfieldShifted.x && predictor.y == zeroMVfieldShifted.y) ? sadZero
+        : (predictor.x == globalMVPredictor.x && predictor.y == globalMVPredictor.y) ? sadGlobal
+        : rawSad(predictor.x, predictor.y);
+    cost = sadPred;
 
     if (cost < nMinCost || tryMany) {
         bestMV.x = predictor.x;
         bestMV.y = predictor.y;
-        bestMV.sad = sad;
+        bestMV.sad = sadPred;
         nMinCost = cost;
     }
     if (tryMany) {
