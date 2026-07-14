@@ -17,8 +17,10 @@
 
 #ifdef _MSC_VER
 #define MVU_FORCE_INLINE __forceinline
+#define MVU_NOINLINE __declspec(noinline)
 #else
 #define MVU_FORCE_INLINE inline __attribute__((always_inline))
+#define MVU_NOINLINE __attribute__((noinline))
 #endif
 
 static constexpr size_t MVU_MEMORY_ALIGN = 64;

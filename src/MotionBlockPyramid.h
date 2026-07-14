@@ -160,6 +160,9 @@ private:
     template <int nLogPel, int flags, typename PixelType>
     void CheckMV_Template(int vx, int vy, int *dir, int val) noexcept;
 
+    template <int nLogPel, int flags, typename PixelType>
+    MVU_NOINLINE void CheckMV_Slow(int vx, int vy, int64_t cost, int *dir, int val) noexcept;
+
     template <int nLogPel, typename PixelType>
     void CheckMV0(int vx, int vy) noexcept;
 

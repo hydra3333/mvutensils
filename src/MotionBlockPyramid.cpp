@@ -301,31 +301,35 @@ void MotionBlockLevel::CheckMV_Template(int vx, int vy, int *dir, int val) noexc
         int64_t cost = MotionDistorsion(vx, vy);
         if (cost >= nMinCost)
             return;
+        CheckMV_Slow<nLogPel, flags, PixelType>(vx, vy, cost, dir, val);
+    }
+}
 
-        int64_t sad = SAD(pSrc_temp[0], nSrcPitch_temp[0], GetRefBlock<nLogPel, PixelType>(vx, vy), nRefPitch[0]);
-        cost += sad + ((flags & CHECKMV_PENALTYNEW) ? ((penaltyNew * sad) >> 8) : 0);
+template <int nLogPel, int flags, typename PixelType>
+void MotionBlockLevel::CheckMV_Slow(int vx, int vy, int64_t cost, int *dir, int val) noexcept {
+    int64_t sad = SAD(pSrc_temp[0], nSrcPitch_temp[0], GetRefBlock<nLogPel, PixelType>(vx, vy), nRefPitch[0]);
+    cost += sad + ((flags & CHECKMV_PENALTYNEW) ? ((penaltyNew * sad) >> 8) : 0);
+    if (cost >= nMinCost)
+        return;
+
+    int64_t saduv = 0;
+    if (chroma) {
+        saduv += SADCHROMA(pSrc_temp[1], nSrcPitch_temp[1], GetRefBlockU<nLogPel, PixelType>(vx, vy), nRefPitch[1]);
+        saduv += SADCHROMA(pSrc_temp[2], nSrcPitch_temp[2], GetRefBlockV<nLogPel, PixelType>(vx, vy), nRefPitch[2]);
+
+        cost += saduv + ((flags & CHECKMV_PENALTYNEW) ? ((penaltyNew * saduv) >> 8) : 0);
         if (cost >= nMinCost)
             return;
-
-        int64_t saduv = 0;
-        if (chroma) {
-            saduv += SADCHROMA(pSrc_temp[1], nSrcPitch_temp[1], GetRefBlockU<nLogPel, PixelType>(vx, vy), nRefPitch[1]);
-            saduv += SADCHROMA(pSrc_temp[2], nSrcPitch_temp[2], GetRefBlockV<nLogPel, PixelType>(vx, vy), nRefPitch[2]);
-
-            cost += saduv + ((flags & CHECKMV_PENALTYNEW) ? ((penaltyNew * saduv) >> 8) : 0);
-            if (cost >= nMinCost)
-                return;
-        }
-
-        if constexpr (flags & CHECKMV_UPDATEBESTMV) {
-            bestMV.x = vx;
-            bestMV.y = vy;
-        }
-        nMinCost = cost;
-        bestMV.sad = sad + saduv;
-        if constexpr (flags & CHECKMV_UPDATEDIR)
-            *dir = val;
     }
+
+    if constexpr (flags & CHECKMV_UPDATEBESTMV) {
+        bestMV.x = vx;
+        bestMV.y = vy;
+    }
+    nMinCost = cost;
+    bestMV.sad = sad + saduv;
+    if constexpr (flags & CHECKMV_UPDATEDIR)
+        *dir = val;
 }
 
 
