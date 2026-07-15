@@ -1646,8 +1646,8 @@ void MotionBlockPyramid::RecalculateMVs(const FramePyramid &pSrcGOF, const Frame
     this->nBlkSizeY = pyramidLevels[0].nBlkSizeY;
     this->nOverlapX = pyramidLevels[0].nOverlapX;
     this->nOverlapY = pyramidLevels[0].nOverlapY;
-    this->xRatioUV = pyramidLevels[0].xRatioUV;
-    this->yRatioUV = pyramidLevels[0].yRatioUV;
+    this->xRatioUV = pSrcGOF.xRatioUV;
+    this->yRatioUV = pSrcGOF.yRatioUV;
     nBlkX = pyramidLevels[0].nBlkX;
     nBlkY = pyramidLevels[0].nBlkY;
     nPel = pyramidLevels[0].nPel;
