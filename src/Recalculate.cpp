@@ -141,12 +141,10 @@ static void recalculateCreate(const VSMap *in, VSMap *out, [[maybe_unused]] void
         if (d->nLambda < 0)
             throw std::runtime_error("mvlambda must be non-negative");
 
-        // Scale by the block area relative to the 8x8 reference. nLambda is user-supplied and the scale
-        // reaches 256 at 128x128, so guard the multiply against int64 overflow before performing it.
-        const int64_t lambdaScale = d->nBlkSizeX * d->nBlkSizeY / 64;
-        if (lambdaScale != 0 && d->nLambda > INT64_MAX / lambdaScale)
+        const int64_t blockArea = d->nBlkSizeX * d->nBlkSizeY;
+        if (d->nLambda > INT64_MAX / blockArea)
             throw std::runtime_error("mvlambda is too large for this block size (would overflow)");
-        d->nLambda *= lambdaScale;
+        d->nLambda = d->nLambda * blockArea / 64;
 
         d->pnew = vsapi->mapGetIntSaturated(in, "pnew", 0, &err);
         if (err)
