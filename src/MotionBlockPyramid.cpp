@@ -1634,6 +1634,14 @@ void MotionBlockPyramid::RecalculateMVs(const FramePyramid &pSrcGOF, const Frame
     if (!pSrcGOF.IsCompatible(pRefGOF))
         throw MotionBlockPyramidError("The two reference frames don't have the same format");
 
+    if (pyramidLevels.empty()) {
+        if (state != State::MetadataOnly)
+            throw MotionBlockPyramidError("The vectors passed are not a valid analysis result");
+        pyramidLevels.resize(1);
+        pyramidLevels[0].Initialize(this->nBlkX, this->nBlkY, this->nBlkSizeX, this->nBlkSizeY, this->nPel, 0,
+            true, this->chroma, this->nOverlapX, this->nOverlapY, this->xRatioUV, this->yRatioUV, this->bitsPerSample);
+    }
+
     int bytesPerSample = SelectOnBitsPerSample(pSrcGOF.bitsPerSample, 1, 2, 4);
 
     pyramidLevels[0].RecalculateMVs(pSrcGOF.GetLevel(0), pRefGOF.GetLevel(0),
