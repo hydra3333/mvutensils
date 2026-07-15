@@ -292,6 +292,8 @@ static void VS_CC flowinterCreate(const VSMap *in, VSMap *out, [[maybe_unused]] 
         if (d->ml <= 0.0f)
             throw std::runtime_error("ml must be greater than 0");
 
+        d->ml = 1.0f / d->ml;
+
         d->time256 = (int)(time * 256.0f / 100.0f);
 
         d->node = vsapi->mapGetNode(in, "clip", 0, nullptr);

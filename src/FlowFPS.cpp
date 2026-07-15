@@ -343,6 +343,8 @@ static void VS_CC flowfpsCreate(const VSMap *in, VSMap *out, [[maybe_unused]] vo
         if (d->ml <= 0.0)
             throw std::runtime_error("ml must be greater than 0");
 
+        d->ml = 1.0f / d->ml;
+
         d->super = vsapi->mapGetNode(in, "super", 0, nullptr);
 
         FramePyramid super(d->super, d->prefix, vsapi);
