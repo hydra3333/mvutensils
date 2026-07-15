@@ -763,6 +763,8 @@ void PyramidPlane::FromExternalPlane(const VSFrame *planeFrame, int hPad, int vP
 
     nWidth = nPaddedWidth - 2 * nHPadding;
     nHeight = nPaddedHeight - 2 * nVPadding;
+
+    subPelPlaneOffset = nPitch * nPaddedHeight;
 }
 
 void PyramidPlane::FromExternalPelPlanes(const VSFrame *pelFrame, int pel, int hPad, int vPad, const VSAPI *vsapi) {
