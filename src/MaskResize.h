@@ -88,5 +88,4 @@ public:
     void Process(uint8_t *dst, ptrdiff_t dststride, const void *src, ptrdiff_t srcstride);
 private:
     mvuzimgxx::FilterGraph graph;
-    MvuAlignedPtr<void> tmp{ nullptr, mvu_aligned_free };
 };
