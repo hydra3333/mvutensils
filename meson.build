@@ -21,6 +21,8 @@ deps = [
 
 add_project_arguments('-DPACKAGE_VERSION="@0@"'.format(meson.project_version()), language: ['cpp'])
 
+add_project_arguments('-fno-math-errno', language: ['cpp'])
+
 install_dir = py.get_install_dir() / 'vapoursynth/plugins/mvutensils'
 
 # VapourSynth variant-selection manifest; installed alongside the DLLs so the autoloader
