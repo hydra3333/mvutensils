@@ -342,7 +342,6 @@ static void VS_CC compensateCreate(const VSMap *in, VSMap *out, [[maybe_unused]]
 
         MotionBlockPyramid vectors(d->vectors, d->prefix, vsapi);
 
-        int64_t nSCD1_old = d->nSCD1;
         vectors.ScaleThSCD(d->nSCD1, d->nSCD2, d->vi->format.bitsPerSample);
 
         d->deltaFrame = vectors.nDeltaFrame;
@@ -350,7 +349,7 @@ static void VS_CC compensateCreate(const VSMap *in, VSMap *out, [[maybe_unused]]
         if (d->fields && vectors.nPel < 2)
             throw std::runtime_error("fields option requires pel > 1");
 
-        d->thSAD = d->thSAD * d->nSCD1 / nSCD1_old;
+        d->thSAD = (int64_t)(d->thSAD * vectors.GetThSCDScaleFactor(d->vi->format.bitsPerSample) + 0.5);
 
         // accumulator is 1x pixel width for float (bytesPerSample 4), 2x for 8/16-bit integer.
         const int accRatio = (d->vi->format.bytesPerSample == 4) ? 1 : 2;
