@@ -1549,7 +1549,12 @@ void MotionBlockPyramid::ValidateVectors() const {
 
 MotionBlockPyramid::MotionBlockPyramid(const VSFrame *src, bool loadVectors, const std::string &prefix, const VSAPI *vsapi) :
     vsapi(vsapi) {
-    LoadFrameData(src, loadVectors, prefix, vsapi);
+    try {
+        LoadFrameData(src, loadVectors, prefix, vsapi);
+    } catch (...) {
+        vsapi->freeFrame(sourceFrame);
+        throw;
+    }
 }
 
 MotionBlockPyramid::MotionBlockPyramid(VSNode *node, const std::string &prefix, const VSAPI *vsapi) :
@@ -1558,7 +1563,12 @@ MotionBlockPyramid::MotionBlockPyramid(VSNode *node, const std::string &prefix, 
     const VSFrame *srcFrame = vsapi->getFrame(0, node, errorMsg, ERROR_SIZE);
     if (!srcFrame)
         throw std::runtime_error("Failed to retrieve first frame from super clip. Error message: " + std::string(errorMsg));
-    LoadFrameData(srcFrame, false, prefix, vsapi);
+    try {
+        LoadFrameData(srcFrame, false, prefix, vsapi);
+    } catch (...) {
+        vsapi->freeFrame(sourceFrame); // see the note above; LoadFrameData took ownership of srcFrame
+        throw;
+    }
 }
 
 MotionBlockPyramid::~MotionBlockPyramid() {

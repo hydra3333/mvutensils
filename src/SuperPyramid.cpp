@@ -919,60 +919,59 @@ void FramePyramid::LoadFrameData(const VSFrame *srcFrame, int maxLevel, const st
     if (!srcFrame)
         throw SuperPyramidError("Invalid source frame");
 
-    serializedData = srcFrame;
-
-    const VSMap *props = vsapi->getFramePropertiesRO(srcFrame);
-    int err;
-    xRatioUV = vsapi->mapGetIntSaturated(props, (prefix + "SuperXRatioUV").c_str(), 0, &err);
-    yRatioUV = vsapi->mapGetIntSaturated(props, (prefix + "SuperYRatioUV").c_str(), 0, &err);
-    nWidth[0] = vsapi->mapGetIntSaturated(props, (prefix + "SuperWidth").c_str(), 0, &err);
-    nHeight[0] = vsapi->mapGetIntSaturated(props, (prefix + "SuperHeight").c_str(), 0, &err);
-    nRealWidth[0] = vsapi->mapGetIntSaturated(props, (prefix + "SuperRealWidth").c_str(), 0, &err);
-    nRealHeight[0] = vsapi->mapGetIntSaturated(props, (prefix + "SuperRealHeight").c_str(), 0, &err);
-    nHPad[0] = vsapi->mapGetIntSaturated(props, (prefix + "SuperHPad").c_str(), 0, &err);
-    nVPad[0] = vsapi->mapGetIntSaturated(props, (prefix + "SuperVPad").c_str(), 0, &err);
-    bitsPerSample = vsapi->mapGetIntSaturated(props, (prefix + "SuperBitsPerSample").c_str(), 0, &err);
-    nBlkSizeX = vsapi->mapGetIntSaturated(props, (prefix + "SuperBlkSizeX").c_str(), 0, &err);
-    nBlkSizeY = vsapi->mapGetIntSaturated(props, (prefix + "SuperBlkSizeY").c_str(), 0, &err);
-    nOverlapX = vsapi->mapGetIntSaturated(props, (prefix + "SuperOverlapX").c_str(), 0, &err);
-    nOverlapY = vsapi->mapGetIntSaturated(props, (prefix + "SuperOverlapY").c_str(), 0, &err);
-
-    nBlkSizePadX[0] = nWidth[0] - nRealWidth[0];
-    nBlkSizePadY[0] = nHeight[0] - nRealHeight[0];
-
-    nPel = vsapi->mapGetIntSaturated(props, (prefix + "SuperPel").c_str(), 0, &err);
-    nLevels = vsapi->mapGetIntSaturated(props, (prefix + "SuperLevels").c_str(), 0, &err);
-    chroma = !!vsapi->mapGetInt(props, (prefix + "SuperChroma").c_str(), 0, &err);
-
-    if (xRatioUV < 1 || yRatioUV < 1 || xRatioUV > 2 || yRatioUV > 2 || nRealWidth[0] > nWidth[0] || nRealHeight[0] > nHeight[0]
-        || nVPad[0] < 0 || nHPad[0] < 0 || nRealHeight[0] < 1 || nRealWidth[0] < 1 || nLevels < 1 || (nPel != 1 && nPel != 2 && nPel != 4)
-        || bitsPerSample < 8 || (bitsPerSample > 16 && bitsPerSample != 32))
-        throw SuperPyramidError("Invalid super frame metadata");
-
-    if (chroma) {
-        nWidth[1] = nWidth[0] / xRatioUV;
-        nWidth[2] = nWidth[0] / xRatioUV;
-        nHeight[1] = nHeight[0] / yRatioUV;
-        nHeight[2] = nHeight[0] / yRatioUV;
-        nRealWidth[1] = nRealWidth[0] / xRatioUV;
-        nRealWidth[2] = nRealWidth[0] / xRatioUV;
-        nRealHeight[1] = nRealHeight[0] / yRatioUV;
-        nRealHeight[2] = nRealHeight[0] / yRatioUV;
-        nHPad[1] = nHPad[0] / xRatioUV;
-        nHPad[2] = nHPad[0] / xRatioUV;
-        nVPad[1] = nVPad[0] / yRatioUV;
-        nVPad[2] = nVPad[0] / yRatioUV;
-        nBlkSizePadX[1] = nWidth[1] - nRealWidth[1];
-        nBlkSizePadX[2] = nWidth[2] - nRealWidth[2];
-        nBlkSizePadY[1] = nHeight[1] - nRealHeight[1];
-        nBlkSizePadY[2] = nHeight[2] - nRealHeight[2];
-    }
-
-    bitsPerSample = vsapi->getVideoFrameFormat(srcFrame)->bitsPerSample;
-
-    int loadLevels = (maxLevel < 0) ? nLevels : std::min(maxLevel, nLevels);
+    serializedData = srcFrame; // take ownership; the single try below frees it on any throw before construction completes.
 
     try {
+        const VSMap *props = vsapi->getFramePropertiesRO(srcFrame);
+        int err;
+        xRatioUV = vsapi->mapGetIntSaturated(props, (prefix + "SuperXRatioUV").c_str(), 0, &err);
+        yRatioUV = vsapi->mapGetIntSaturated(props, (prefix + "SuperYRatioUV").c_str(), 0, &err);
+        nWidth[0] = vsapi->mapGetIntSaturated(props, (prefix + "SuperWidth").c_str(), 0, &err);
+        nHeight[0] = vsapi->mapGetIntSaturated(props, (prefix + "SuperHeight").c_str(), 0, &err);
+        nRealWidth[0] = vsapi->mapGetIntSaturated(props, (prefix + "SuperRealWidth").c_str(), 0, &err);
+        nRealHeight[0] = vsapi->mapGetIntSaturated(props, (prefix + "SuperRealHeight").c_str(), 0, &err);
+        nHPad[0] = vsapi->mapGetIntSaturated(props, (prefix + "SuperHPad").c_str(), 0, &err);
+        nVPad[0] = vsapi->mapGetIntSaturated(props, (prefix + "SuperVPad").c_str(), 0, &err);
+        bitsPerSample = vsapi->mapGetIntSaturated(props, (prefix + "SuperBitsPerSample").c_str(), 0, &err);
+        nBlkSizeX = vsapi->mapGetIntSaturated(props, (prefix + "SuperBlkSizeX").c_str(), 0, &err);
+        nBlkSizeY = vsapi->mapGetIntSaturated(props, (prefix + "SuperBlkSizeY").c_str(), 0, &err);
+        nOverlapX = vsapi->mapGetIntSaturated(props, (prefix + "SuperOverlapX").c_str(), 0, &err);
+        nOverlapY = vsapi->mapGetIntSaturated(props, (prefix + "SuperOverlapY").c_str(), 0, &err);
+
+        nBlkSizePadX[0] = nWidth[0] - nRealWidth[0];
+        nBlkSizePadY[0] = nHeight[0] - nRealHeight[0];
+
+        nPel = vsapi->mapGetIntSaturated(props, (prefix + "SuperPel").c_str(), 0, &err);
+        nLevels = vsapi->mapGetIntSaturated(props, (prefix + "SuperLevels").c_str(), 0, &err);
+        chroma = !!vsapi->mapGetInt(props, (prefix + "SuperChroma").c_str(), 0, &err);
+
+        if (xRatioUV < 1 || yRatioUV < 1 || xRatioUV > 2 || yRatioUV > 2 || nRealWidth[0] > nWidth[0] || nRealHeight[0] > nHeight[0]
+            || nVPad[0] < 0 || nHPad[0] < 0 || nRealHeight[0] < 1 || nRealWidth[0] < 1 || nLevels < 1 || (nPel != 1 && nPel != 2 && nPel != 4)
+            || bitsPerSample < 8 || (bitsPerSample > 16 && bitsPerSample != 32))
+            throw SuperPyramidError("Invalid super frame metadata");
+
+        if (chroma) {
+            nWidth[1] = nWidth[0] / xRatioUV;
+            nWidth[2] = nWidth[0] / xRatioUV;
+            nHeight[1] = nHeight[0] / yRatioUV;
+            nHeight[2] = nHeight[0] / yRatioUV;
+            nRealWidth[1] = nRealWidth[0] / xRatioUV;
+            nRealWidth[2] = nRealWidth[0] / xRatioUV;
+            nRealHeight[1] = nRealHeight[0] / yRatioUV;
+            nRealHeight[2] = nRealHeight[0] / yRatioUV;
+            nHPad[1] = nHPad[0] / xRatioUV;
+            nHPad[2] = nHPad[0] / xRatioUV;
+            nVPad[1] = nVPad[0] / yRatioUV;
+            nVPad[2] = nVPad[0] / yRatioUV;
+            nBlkSizePadX[1] = nWidth[1] - nRealWidth[1];
+            nBlkSizePadX[2] = nWidth[2] - nRealWidth[2];
+            nBlkSizePadY[1] = nHeight[1] - nRealHeight[1];
+            nBlkSizePadY[2] = nHeight[2] - nRealHeight[2];
+        }
+
+        bitsPerSample = vsapi->getVideoFrameFormat(srcFrame)->bitsPerSample;
+
+        int loadLevels = (maxLevel < 0) ? nLevels : std::min(maxLevel, nLevels);
 
         pyramidLevels.resize(loadLevels);
 
