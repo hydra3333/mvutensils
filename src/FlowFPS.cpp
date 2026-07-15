@@ -63,6 +63,19 @@ struct FlowFPSData {
     }
 };
 
+static void SetFpsDuration(VSFrame *frame, int64_t fpsNum, int64_t fpsDen, const VSAPI *vsapi) noexcept {
+    VSMap *props = vsapi->getFramePropertiesRW(frame);
+    vsapi->mapSetInt(props, "_DurationNum", fpsDen, maReplace);
+    vsapi->mapSetInt(props, "_DurationDen", fpsNum, maReplace);
+}
+
+static const VSFrame *PassThroughWithFpsDuration(const VSFrame *src, int64_t fpsNum, int64_t fpsDen, VSCore *core, const VSAPI *vsapi) noexcept {
+    VSFrame *dst = vsapi->copyFrame(src, core);
+    vsapi->freeFrame(src);
+    SetFpsDuration(dst, fpsNum, fpsDen, vsapi);
+    return dst;
+}
+
 template<typename PixelType>
 static const VSFrame *VS_CC flowfpsGetFrame(int n, int activationReason, void *instanceData, [[maybe_unused]] void **frameData, VSFrameContext *frameCtx, VSCore *core, const VSAPI *vsapi) noexcept {
     const FlowFPSData *d = reinterpret_cast<FlowFPSData *>(instanceData);
@@ -118,9 +131,9 @@ static const VSFrame *VS_CC flowfpsGetFrame(int n, int activationReason, void *i
             int nright = nleft + off;
 
             if (time256 == 0) {
-                return vsapi->getFrameFilter(std::min(nleft, d->oldvi->numFrames - 1), d->node, frameCtx); // simply left
+                return PassThroughWithFpsDuration(vsapi->getFrameFilter(std::min(nleft, d->oldvi->numFrames - 1), d->node, frameCtx), d->vi.fpsNum, d->vi.fpsDen, core, vsapi); // simply left
             } else if (time256 == 256) {
-                return vsapi->getFrameFilter(std::min(nright, d->oldvi->numFrames - 1), d->node, frameCtx); // simply right
+                return PassThroughWithFpsDuration(vsapi->getFrameFilter(std::min(nright, d->oldvi->numFrames - 1), d->node, frameCtx), d->vi.fpsNum, d->vi.fpsDen, core, vsapi); // simply right
             }
 
             bool vectorsLoadFrame = (nleft < d->oldvi->numFrames && nright < d->oldvi->numFrames);
@@ -135,6 +148,7 @@ static const VSFrame *VS_CC flowfpsGetFrame(int n, int activationReason, void *i
                 const VSFrame *dstPropSrc = vsapi->getFrameFilter(nleft, d->super, frameCtx);
                 dst = vsapi->newVideoFrame(&d->vi.format, d->vi.width, d->vi.height, dstPropSrc, core);
                 vsapi->freeFrame(dstPropSrc);
+                SetFpsDuration(dst, d->vi.fpsNum, d->vi.fpsDen, vsapi);
 
                 auto SmallB = vectorsB.MakeSmallVectorMasks();
                 auto SmallF = vectorsF.MakeSmallVectorMasks();
@@ -260,6 +274,7 @@ static const VSFrame *VS_CC flowfpsGetFrame(int n, int activationReason, void *i
                     const VSFrame *src = vsapi->getFrameFilter(std::min(nleft, d->oldvi->numFrames - 1), d->node, frameCtx);
                     const VSFrame *ref = vsapi->getFrameFilter(std::min(nright, d->oldvi->numFrames - 1), d->node, frameCtx);
                     VSFrame *dst = vsapi->newVideoFrame(&d->vi.format, d->vi.width, d->vi.height, src, core);
+                    SetFpsDuration(dst, d->vi.fpsNum, d->vi.fpsDen, vsapi);
 
                     for (int plane = 0; plane < d->vi.format.numPlanes; plane++)
                         Blend<PixelType>(vsapi->getWritePtr(dst, plane), vsapi->getReadPtr(src, plane), vsapi->getReadPtr(ref, plane), vsapi->getFrameHeight(dst, plane), vsapi->getFrameWidth(dst, plane), vsapi->getStride(dst, plane), time256);
@@ -269,7 +284,7 @@ static const VSFrame *VS_CC flowfpsGetFrame(int n, int activationReason, void *i
 
                     return dst;
                 } else {
-                    return vsapi->getFrameFilter(std::min(nleft, d->oldvi->numFrames - 1), d->node, frameCtx);
+                    return PassThroughWithFpsDuration(vsapi->getFrameFilter(std::min(nleft, d->oldvi->numFrames - 1), d->node, frameCtx), d->vi.fpsNum, d->vi.fpsDen, core, vsapi);
                 }
             }
         } catch (const std::exception &e) {
