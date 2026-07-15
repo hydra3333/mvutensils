@@ -140,7 +140,14 @@ static MVU_FORCE_INLINE __m128i hsum_epi32(const __m128i &a) {
 template <unsigned width, unsigned height>
 struct SADWrapperU16 {
 
+    // 16-bit SAD via a bias + pmaddwd widen. abs_diff_epu16 is unsigned [0,65535]; xor 0x8000 maps it to
+    // signed [-32768,32767] (== v-32768), and pmaddwd(.,1) fuses the 16->32 widen + adjacent-pair sum into a
+    // single op, so the compile-time constant 32768*width*height is added back at the end. Replaces the
+    // unpacklo/unpackhi + two adds (~1.1-1.2x for width<=64, up to ~2x at width=128 where that widen turns
+    // port-bound). Full vectors only (width % 8 == 0), so every lane is a valid pixel; int32 can't overflow up
+    // to 128x128 (max |partial| ~1.3e8/lane, final SAD < 1.1e9). Bench: bench_degrain/sad16_madd_bench.cpp.
     static unsigned int sad_u16_sse2(const uint8_t *pSrc8, intptr_t nSrcPitch, const uint8_t *pRef8, intptr_t nRefPitch) noexcept {
+        const __m128i ones = _mm_set1_epi16(1), bias = _mm_set1_epi16((short)0x8000);
         __m128i sum = zeroes;
 
         for (unsigned y = 0; y < height; y++) {
@@ -153,15 +160,14 @@ struct SADWrapperU16 {
 
                 __m128i diff = abs_diff_epu16(m2, m3);
 
-                sum = _mm_add_epi32(sum, _mm_unpacklo_epi16(diff, zeroes));
-                sum = _mm_add_epi32(sum, _mm_unpackhi_epi16(diff, zeroes));
+                sum = _mm_add_epi32(sum, _mm_madd_epi16(_mm_xor_si128(diff, bias), ones));
             }
 
             pSrc8 += nSrcPitch;
             pRef8 += nRefPitch;
         }
 
-        return (unsigned)_mm_cvtsi128_si32(hsum_epi32(sum));
+        return (unsigned)_mm_cvtsi128_si32(hsum_epi32(sum)) + 32768u * width * height;
     }
 
 };

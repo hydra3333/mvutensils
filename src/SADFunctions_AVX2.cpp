@@ -73,17 +73,19 @@ struct SADWrapperU8_AVX2<16, height> {
 };
 
 
-// 16-bit SAD. There is no psadbw for 16-bit pixels, so this does abs_diff_epu16 then widens
-// (unpack 16->32) into an int32 accumulator -- same algorithm as the SSE2 SADWrapperU16, widened
-// to ymm (16 uint16 per row), which is ~2x faster. width >= 16 fills one ymm per row; width-8
-// 16-bit stays on the SSE2 path. (int32 can't overflow: 128*128 * 65535 < 2^31.)
+// 16-bit SAD. There is no psadbw for 16-bit pixels, so this does abs_diff_epu16 then a bias + pmaddwd
+// widen: abs_diff is unsigned [0,65535], xor 0x8000 maps it to signed [-32768,32767] (== v-32768), and
+// pmaddwd(.,1) fuses the 16->32 widen + adjacent-pair sum into one op (the compile-time constant
+// 32768*width*height is added back). ~1.1-1.2x over the unpacklo/unpackhi + two adds it replaces (widened
+// to ymm, 16 uint16/row). width >= 16 fills one ymm per row; width-8 16-bit stays on the SSE2 path.
+// int32 can't overflow up to 128x128. Bench: bench_degrain/sad16_madd_bench.cpp.
 template <unsigned width, unsigned height>
 struct SADWrapperU16_AVX2 {
     static_assert(width >= 16, "");
 
     static unsigned int sad_u16_avx2(const uint8_t *pSrc8, intptr_t nSrcPitch, const uint8_t *pRef8, intptr_t nRefPitch) noexcept {
-        const __m256i z = _mm256_setzero_si256();
-        __m256i sum = z;
+        const __m256i ones = _mm256_set1_epi16(1), bias = _mm256_set1_epi16((short)0x8000);
+        __m256i sum = _mm256_setzero_si256();
 
         for (unsigned y = 0; y < height; y++) {
             const uint16_t *pSrc = (const uint16_t *)pSrc8;
@@ -94,8 +96,7 @@ struct SADWrapperU16_AVX2 {
                 __m256i m3 = _mm256_loadu_si256((const __m256i *)&pRef[x]);
                 __m256i diff = _mm256_or_si256(_mm256_subs_epu16(m2, m3), _mm256_subs_epu16(m3, m2));
 
-                sum = _mm256_add_epi32(sum, _mm256_unpacklo_epi16(diff, z));
-                sum = _mm256_add_epi32(sum, _mm256_unpackhi_epi16(diff, z));
+                sum = _mm256_add_epi32(sum, _mm256_madd_epi16(_mm256_xor_si256(diff, bias), ones));
             }
 
             pSrc8 += nSrcPitch;
@@ -105,7 +106,7 @@ struct SADWrapperU16_AVX2 {
         __m128i s = _mm_add_epi32(_mm256_castsi256_si128(sum), _mm256_extracti128_si256(sum, 1));
         s = _mm_add_epi32(s, _mm_srli_si128(s, 8));
         s = _mm_add_epi32(s, _mm_srli_si128(s, 4));
-        return (unsigned)_mm_cvtsi128_si32(s);
+        return (unsigned)_mm_cvtsi128_si32(s) + 32768u * width * height;
     }
 };
 
