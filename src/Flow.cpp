@@ -87,7 +87,7 @@ static const VSFrame *VS_CC flowGetFrame(int n, int activationReason, void *inst
         try {
             MotionBlockPyramid vectors(vsapi->getFrameFilter(n, d->vectors, frameCtx), 1, d->prefix, vsapi);
 
-            if (vectors.IsUsable(d->thscd1, d->thscd2)) {
+            if (nref >= 0 && nref < d->vi->numFrames && vectors.IsUsable(d->thscd1, d->thscd2)) {
                 const VSFrame *propSrc = vsapi->getFrameFilter(n, d->clip, frameCtx);
                 dst = vsapi->newVideoFrame(&d->vi->format, d->vi->width, d->vi->height, propSrc, core);
                 vsapi->freeFrame(propSrc);
