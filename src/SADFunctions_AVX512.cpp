@@ -38,23 +38,24 @@ struct SADWrapperU8_AVX512 {
 template <unsigned W, unsigned H>
 struct SADWrapperU16_AVX512 {
     static_assert(W >= 16, "");
-    // 16-bit SAD via a bias + pmaddwd widen (same trick as the SSE2/AVX2 SADWrapperU16 kernels): abs_diff is
-    // unsigned [0,65535], xor 0x8000 maps it to signed [-32768,32767], vpmaddwd(.,1) fuses the 16->32 widen +
-    // adjacent-pair sum into one op, and the compile-time constant 32768*W*H is added back. ~1.3-1.5x over the
-    // unpacklo/unpackhi + two adds it replaces at width 16-64. The largest 128x128 block regresses slightly
-    // (throughput-bound), but a single widen path is worth it: on VNNI CPUs the VNNI kernel takes width<=64,
-    // so 128 is the only size that reaches here, and only on the rare AVX-512-without-VNNI part at that.
-    // int32 can't overflow up to 128x128. Bench: bench_degrain/sad16_madd_bench.cpp.
+    // Deliberately keeps the unpacklo/unpackhi + two-adds widen, NOT the bias + vpmaddwd trick the SSE2/AVX2
+    // SADWrapperU16 kernels use. The madd form is faster in isolation (~1.3-1.5x at width 16-64, see
+    // bench_degrain/sad16_madd_bench.cpp) but a 512-bit vpmaddwd regressed the whole motion search end-to-end
+    // (~-10% at 32x32 on a real bbb benchmark, on top of the 128x128 throughput regression): the surrounding
+    // search pays a frequency/port cost for the heavy 512-bit multiply that the small SAD speedup doesn't cover.
+    // The 256-bit AVX2 vpmaddwd has no such effect (it wins end-to-end). This path only runs on AVX-512 parts
+    // WITHOUT VNNI (VNNI otherwise takes width<=64), a rare audience not worth an unstable widen -- so leave it.
     static unsigned int sad_u16_avx512(const uint8_t *pSrc8, intptr_t nSrcPitch, const uint8_t *pRef8, intptr_t nRefPitch) noexcept {
-        const __m512i ones = _mm512_set1_epi16(1), bias = _mm512_set1_epi16((short)0x8000);
-        __m512i acc = _mm512_setzero_si512();
+        const __m512i z = _mm512_setzero_si512();
+        __m512i acc = z;
         if constexpr (W >= 32) {
             for (unsigned y = 0; y < H; y++) {
                 const uint16_t *pSrc = (const uint16_t *)pSrc8, *pRef = (const uint16_t *)pRef8;
                 for (unsigned x = 0; x < W; x += 32) {
                     __m512i a = _mm512_loadu_si512(pSrc + x), b = _mm512_loadu_si512(pRef + x);
                     __m512i d = _mm512_or_si512(_mm512_subs_epu16(a, b), _mm512_subs_epu16(b, a));
-                    acc = _mm512_add_epi32(acc, _mm512_madd_epi16(_mm512_xor_si512(d, bias), ones));
+                    acc = _mm512_add_epi32(acc, _mm512_unpacklo_epi16(d, z));
+                    acc = _mm512_add_epi32(acc, _mm512_unpackhi_epi16(d, z));
                 }
                 pSrc8 += nSrcPitch;
                 pRef8 += nRefPitch;
@@ -64,12 +65,13 @@ struct SADWrapperU16_AVX512 {
                 __m512i a = _mm512_inserti64x4(_mm512_castsi256_si512(_mm256_loadu_si256((const __m256i *)(pSrc8))), _mm256_loadu_si256((const __m256i *)(pSrc8 + nSrcPitch)), 1);
                 __m512i b = _mm512_inserti64x4(_mm512_castsi256_si512(_mm256_loadu_si256((const __m256i *)(pRef8))), _mm256_loadu_si256((const __m256i *)(pRef8 + nRefPitch)), 1);
                 __m512i d = _mm512_or_si512(_mm512_subs_epu16(a, b), _mm512_subs_epu16(b, a));
-                acc = _mm512_add_epi32(acc, _mm512_madd_epi16(_mm512_xor_si512(d, bias), ones));
+                acc = _mm512_add_epi32(acc, _mm512_unpacklo_epi16(d, z));
+                acc = _mm512_add_epi32(acc, _mm512_unpackhi_epi16(d, z));
                 pSrc8 += 2 * nSrcPitch;
                 pRef8 += 2 * nRefPitch;
             }
         }
-        return (unsigned)((uint32_t)_mm512_reduce_add_epi32(acc) + 32768u * W * H);
+        return (unsigned)_mm512_reduce_add_epi32(acc);
     }
 };
 
