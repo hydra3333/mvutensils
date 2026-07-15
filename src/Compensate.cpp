@@ -387,7 +387,7 @@ static void VS_CC compensateCreate(const VSMap *in, VSMap *out, [[maybe_unused]]
 
     VSFilterDependency deps[3] = { 
         {d->node, rpStrictSpatial},
-        {d->super, rpStrictSpatial},
+        {d->super, rpGeneral},
         {d->vectors, rpNoFrameReuse},
     };
 

@@ -237,7 +237,7 @@ static void VS_CC flowCreate(const VSMap *in, VSMap *out, [[maybe_unused]] void 
 
     VSFilterDependency deps[3] = {
         {d->clip, rpStrictSpatial},
-        {d->super, rpStrictSpatial},
+        {d->super, rpGeneral},
         {d->vectors, rpStrictSpatial},
     };
 
