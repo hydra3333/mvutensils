@@ -544,7 +544,6 @@ static void fillBorderPrev(VSFrame *dst, DepanStabiliseData *d, int nbase, int n
     for (int n = ndest - 1; n >= nprev; n--) { // summary inverse transform
         transform trcur;
         motion2transform(d->motion[n + 1]->dx, d->motion[n + 1]->dy, d->motion[n + 1]->rot, d->motion[n + 1]->zoom, d->pixaspect / d->nfields, d->xcenter, d->ycenter, 1, 1.0f, &trcur);
-        nprevbest = n;
         sumtransform(&tr[0], &trcur, &tr[0]);
         float dxt1, dyt1, rott1, zoomt1;
         transform2motion(&tr[0], 1, d->xcenter, d->ycenter, d->pixaspect / d->nfields, &dxt1, &dyt1, &rott1, &zoomt1);

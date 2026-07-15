@@ -381,6 +381,9 @@ static void VS_CC flowfpsCreate(const VSMap *in, VSMap *out, [[maybe_unused]] vo
         if (d->vi.fpsNum == 0 || d->vi.fpsDen == 0)
             throw std::runtime_error("input clip must have known framerate");
 
+        if (num < 0 || den < 0)
+            throw std::runtime_error("num and den must not be negative");
+
         d->fa = d->vi.fpsNum;
         d->fb = d->vi.fpsDen;
         if (num != 0 && den != 0) {
