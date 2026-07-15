@@ -87,8 +87,6 @@ void PlaneResizer::Init(int dstwidth, int dstheight, int nBlkX, int nBlkY, int n
     } catch (mvuzimgxx::zerror &e) {
         throw std::runtime_error(std::string("Error building filter graph for mask tile: ") + e.msg);
     }
-
-    tmp = MaskResizer::GetTmpBuffer(graph.get_tmp_size());
 }
 
 void PlaneResizer::Process(uint8_t *dst, ptrdiff_t dststride, const void *src, ptrdiff_t srcstride) {
@@ -102,5 +100,6 @@ void PlaneResizer::Process(uint8_t *dst, ptrdiff_t dststride, const void *src, p
     dstBuf.plane[0].stride = dststride;
     dstBuf.plane[0].mask = ZIMG_BUFFER_MAX;
 
+    auto tmp = MaskResizer::GetTmpBuffer(graph.get_tmp_size());
     graph.process(srcBuf, dstBuf, tmp.get());
 }
