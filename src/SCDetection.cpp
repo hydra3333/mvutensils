@@ -103,7 +103,7 @@ static void VS_CC scdetectionCreate(const VSMap *in, VSMap *out, [[maybe_unused]
     try {
         MotionBlockPyramid vectors(d->vectors, d->prefix, vsapi);
 
-        vectors.ScaleThSCD(d->thscd1, d->thscd2, d->vi->format.bitsPerSample);
+        vectors.ScaleThSCD(d->thscd1, d->thscd2, vectors.bitsPerSample);
     } catch (const std::exception &e) {
         vsapi->mapSetError(out, ("SCDetection: " + std::string(e.what())).c_str());
         return;
