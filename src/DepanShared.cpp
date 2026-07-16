@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <numbers>
@@ -151,10 +152,19 @@ bool mapGetMotion(MotionData &m, const VSMap *props, const VSAPI *vsapi) {
     if (err[0] || err[1] || err[2] || err[3] || err[4])
         return false;
 
-    m.dx = dx;
-    m.dy = dy;
-    m.rot = rot;
-    m.zoom = zoom;
+    // Reject non-finite motion from an untrusted/corrupt data clip: it would poison the affine transform
+    // and reach an undefined float-to-int conversion in the compensate planes (pixel indexing there is
+    // already clamp-guarded, so this is UB in the cast only). A well-formed DepanAnalyse/DepanEstimate
+    // clip never produces these.
+    if (!std::isfinite(dx) || !std::isfinite(dy) || !std::isfinite(rot) || !std::isfinite(zoom))
+        return false;
+
+    // Clamp finite magnitudes to values far beyond any real global motion, so the transformed source
+    // coordinates stay well within int range for the (int)floorf casts regardless of frame size.
+    m.dx = std::clamp(dx, -1.0e6f, 1.0e6f);
+    m.dy = std::clamp(dy, -1.0e6f, 1.0e6f);
+    m.rot = std::clamp(rot, -3.6e5f, 3.6e5f);   // sin/cos already bound rot's effect; keep it sane
+    m.zoom = std::clamp(zoom, 1.0e-2f, 1.0e2f); // also keeps zoom strictly positive for logf
     m.badMotion = (good == 0);
     return true;
 }

@@ -708,6 +708,10 @@ static void VS_CC depanEstimateCreate(const VSMap *in, VSMap *out, [[maybe_unuse
                     wx = wx * 2;
             }
             data1->winx = wx;
+            // The doubling loop lands on 1 (odd) when width-wleft == 1, which overreads the source by one
+            // column in frame_data2d's i+=2 loop just like a user-supplied odd winx; reject it.
+            if (data1->winx & 1)
+                throw std::runtime_error("the automatic winx resolved to a 1-pixel window (width-wleft is too small); use a larger frame or smaller wleft");
         }
 
         if (data1->zoommax != 1.0f) {
