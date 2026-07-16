@@ -1978,8 +1978,11 @@ std::unique_ptr<SmallVectorMasks> MotionBlockPyramid::MakeSmallVectorMasks(int f
             const BlockData block = GetBlock(i);
             int vx = block.vector.x;
             int vy = block.vector.y;
-            masks->VXSmallY[bx + by * pitchVSmallY] = vx + (1 << 15);
-            masks->VYSmallY[bx + by * pitchVSmallY] = vy + (1 << 15) + fieldOffset;
+            // Bias into uint16_t for the resizer (see SmallVectorMasks). Saturate so a vector that doesn't
+            // fit the biased range clamps to the farthest representable offset instead of wrapping to a
+            // bogus (possibly out-of-bounds) one on large frames / high pel.
+            masks->VXSmallY[bx + by * pitchVSmallY] = static_cast<uint16_t>(std::clamp(vx + (1 << 15), 0, 0xFFFF));
+            masks->VYSmallY[bx + by * pitchVSmallY] = static_cast<uint16_t>(std::clamp(vy + (1 << 15) + fieldOffset, 0, 0xFFFF));
         }
     }
 
