@@ -112,7 +112,7 @@ static void recalculateCreate(const VSMap *in, VSMap *out, [[maybe_unused]] void
 
         CheckBlkSize(d->nBlkSizeX, d->nBlkSizeY, d->nOverlapX, d->nOverlapY, d->vi->format.subSamplingW, d->vi->format.subSamplingH, d->useSatd);
 
-        d->thSAD = vsapi->mapGetInt(in, "thsad", 0, &err);
+        d->thSAD = vsapi->mapGetIntSaturated(in, "thsad", 0, &err); // saturated so the pixelMax/blockArea scaling below can't overflow int64
         if (err)
             d->thSAD = 200;
 
@@ -135,16 +135,15 @@ static void recalculateCreate(const VSMap *in, VSMap *out, [[maybe_unused]] void
         if (d->vi->format.colorFamily == cfGray)
             d->chroma = false;
 
-        d->nLambda = vsapi->mapGetInt(in, "mvlambda", 0, &err);
+        d->nLambda = vsapi->mapGetIntSaturated(in, "mvlambda", 0, &err);
         if (err)
             d->nLambda = 1000;
         if (d->nLambda < 0)
             throw std::runtime_error("mvlambda must be non-negative");
 
-        const int64_t blockArea = d->nBlkSizeX * d->nBlkSizeY;
-        if (d->nLambda > INT64_MAX / blockArea)
-            throw std::runtime_error("mvlambda is too large for this block size (would overflow)");
-        d->nLambda = d->nLambda * blockArea / 64;
+        // Read saturated, so the later blockArea/64 and pixelMax/255 scalings can never overflow int64.
+        // Multiply before dividing so small blocks keep a non-zero lambda.
+        d->nLambda = d->nLambda * (d->nBlkSizeX * d->nBlkSizeY) / 64;
 
         d->pnew = vsapi->mapGetIntSaturated(in, "pnew", 0, &err);
         if (err)
