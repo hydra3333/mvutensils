@@ -1751,8 +1751,11 @@ double MotionBlockPyramid::GetThSCDScaleFactor(int bitsPerSample) const {
 void MotionBlockPyramid::ScaleThSCD(int64_t &thscd1, float &thscd2, int bitsPerSample) const {
     constexpr int maxSAD = 8 * 8 * 255;
 
-    if (thscd1 > maxSAD)
-        throw MotionBlockPyramidError("thscd1 can be at most " + std::to_string(maxSAD));
+    if (thscd1 < 0 || thscd1 > maxSAD)
+        throw MotionBlockPyramidError("thscd1 must be between 0 and " + std::to_string(maxSAD));
+
+    if (!std::isfinite(thscd2) || thscd2 < 0.0f || thscd2 > 100.0f)
+        throw MotionBlockPyramidError("thscd2 must be a percentage between 0 and 100");
 
     // SCD thresholds
     thscd1 = (int64_t)(thscd1 * GetThSCDScaleFactor(bitsPerSample) + 0.5);
