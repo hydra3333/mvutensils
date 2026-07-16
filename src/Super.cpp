@@ -157,13 +157,16 @@ static void VS_CC superCreate(const VSMap *in, VSMap *out, [[maybe_unused]] void
 
         d->usePelClip = false;
         if (pelvi && (d->nPel >= 2)) {
-            if ((pelvi->width == d->vi.width * d->nPel) &&
-                (pelvi->height == d->vi.height * d->nPel)) {
-                d->usePelClip = true;
-            } else {
+            if ((pelvi->width != d->vi.width * d->nPel) &&
+                (pelvi->height != d->vi.height * d->nPel))
                 throw std::runtime_error("pelclip's dimensions must be a multiple of the input clip's dimensions");
-            }
+
+            if (pelvi->numFrames != d->vi.numFrames)
+                throw std::runtime_error("pelclip's length must match the input clip's length");
+
+            d->usePelClip = true;
         }
+
 
     } catch (const std::exception &e) {
         vsapi->mapSetError(out, ("Super: " + std::string(e.what())).c_str());
