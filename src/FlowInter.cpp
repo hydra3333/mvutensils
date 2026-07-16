@@ -93,7 +93,7 @@ static const VSFrame *VS_CC flowinterGetFrame(int n, int activationReason, void 
             if (vectorsB.IsUsable(d->thscd1, d->thscd2) && vectorsF.IsUsable(d->thscd1, d->thscd2)) {
                 FramePyramid src(vsapi->getFrameFilter(n, d->super, frameCtx), 1, d->prefix, vsapi);
                 FramePyramid ref(vsapi->getFrameFilter(n + off, d->super, frameCtx), 1, d->prefix, vsapi);
-                const VSFrame *dstPropSrc = vsapi->getFrameFilter(n, d->super, frameCtx);
+                const VSFrame *dstPropSrc = vsapi->getFrameFilter(n, d->node, frameCtx);
                 dst = vsapi->newVideoFrame(&d->vi->format, d->vi->width, d->vi->height, dstPropSrc, core);
                 vsapi->freeFrame(dstPropSrc);
 
