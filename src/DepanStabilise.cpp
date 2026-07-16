@@ -1102,8 +1102,8 @@ static void VS_CC depanStabiliseCreate(const VSMap *in, VSMap *out, [[maybe_unus
 
     try {
         // sanity checks
-        if (d->cutoff <= 0.0f)
-            throw std::runtime_error("cutoff must be greater than 0");
+        if (!std::isfinite(d->cutoff) || d->cutoff <= 0.0f)
+            throw std::runtime_error("cutoff must be a finite value greater than 0");
 
         if (d->prev < 0)
             throw std::runtime_error("prev must not be negative");
@@ -1114,8 +1114,20 @@ static void VS_CC depanStabiliseCreate(const VSMap *in, VSMap *out, [[maybe_unus
         if (d->subpixel < 0 || d->subpixel > 2)
             throw std::runtime_error("subpixel must be between 0 and 2 (inclusive)");
 
-        if (d->pixaspect <= 0.0f)
-            throw std::runtime_error("pixaspect must be greater than 0");
+        if (!std::isfinite(d->pixaspect) || d->pixaspect <= 0.0f)
+            throw std::runtime_error("pixaspect must be a finite value greater than 0");
+
+        if (!std::isfinite(d->damping))
+            throw std::runtime_error("damping must be a finite value");
+
+        if (!std::isfinite(d->initzoom) || d->initzoom <= 0.0f)
+            throw std::runtime_error("initzoom must be a finite value greater than 0");
+
+        if (!std::isfinite(d->dxmax) || !std::isfinite(d->dymax) || !std::isfinite(d->zoommax) || !std::isfinite(d->rotmax))
+            throw std::runtime_error("dxmax, dymax, zoommax and rotmax must be finite values");
+
+        if (!std::isfinite(d->tzoom) || d->tzoom < 0.0f)
+            throw std::runtime_error("tzoom must be a finite non-negative value");
 
         if (d->mirror < 0 || d->mirror > 15)
             throw std::runtime_error("mirror must be between 0 and 15 (inclusive)");

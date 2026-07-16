@@ -355,8 +355,11 @@ static void VS_CC depanAnalyseCreate(const VSMap *in, VSMap *out, [[maybe_unused
         d->tff = !!vsapi->mapGetInt(in, "tff", 0, &err);
         d->tff_exists = !err;
 
-        if (d->pixaspect <= 0.0f)
-            throw std::runtime_error("pixaspect must be positive");
+        if (!std::isfinite(d->pixaspect) || d->pixaspect <= 0.0f)
+            throw std::runtime_error("pixaspect must be a finite positive value");
+
+        if (!std::isfinite(d->error) || !std::isfinite(d->wrong) || !std::isfinite(d->zerow))
+            throw std::runtime_error("error, wrong and zerow must be finite values");
 
         d->clip = vsapi->mapGetNode(in, "clip", 0, nullptr);
         d->vi = vsapi->getVideoInfo(d->clip);

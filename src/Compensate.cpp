@@ -19,6 +19,7 @@
 // http://www.gnu.org/copyleft/gpl.html .
 
 #include <memory>
+#include <cmath>
 #include <VapourSynth4.h>
 
 #include "CopyCode.h"
@@ -319,7 +320,7 @@ static void VS_CC compensateCreate(const VSMap *in, VSMap *out, [[maybe_unused]]
     d->tff_exists = !err;
 
     try {
-        if (time < 0.0 || time > 100.0)
+        if (!std::isfinite(time) || time < 0.0 || time > 100.0)
             throw std::runtime_error("time must be between 0.0 and 100.0");
 
         const char *prefix = vsapi->mapGetData(in, "prefix", 0, &err);

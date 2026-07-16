@@ -122,7 +122,13 @@ and omitted from the per-function tables below.
 
 > **Porting:** `thscd2` is now a 0–100 float **percentage** of changed blocks instead of the old
 > 0–256 integer count. The default went from `130` (≈51% of 256) to the equivalent `51`; multiply
-> an old value by `100/256` to convert.
+> an old value by `100/256` to convert. An out-of-range value (such as the old `130`) is now rejected
+> rather than silently disabling scene detection.
+
+> **Validation:** numeric arguments are checked when the filter is created — values outside the range
+> shown here, and non-finite ones (`nan`/`inf`), are rejected with an error instead of silently
+> producing wrong output. `Degrain`'s `limit` is the deliberate exception: there `inf`/`nan` disables
+> limiting.
 
 ## Super
 
@@ -401,8 +407,8 @@ core.mvu.FlowFPS(vnode clip, vnode super, vnode[] vectors[, int num=25, int den=
 | clip | 8–16 bit integer or 32 bit float, GRAY/YUV | | Source clip. |
 | super | vnode | (required) | Super clip. |
 | vectors | vnode[] | (required) | `[mvbw, mvfw]`. |
-| num | int | (25) | Output frame-rate numerator. |
-| den | int | (1) | Output frame-rate denominator. |
+| num | int | (25) | Output frame-rate numerator. Must be non-negative; if `num` or `den` is `0`, the output rate defaults to twice the input rate. |
+| den | int | (1) | Output frame-rate denominator. Must be non-negative. |
 | extramask | bint | (True) | Use a second occlusion-mask pass. `extramask=False` matches the old `mask=1`; `extramask=True` (default) matches `mask=2`. |
 | ml | float | (100.0) | Occlusion mask scale (see `FlowInter`). |
 | blend | bint | (True) | Blend occluded regions. |

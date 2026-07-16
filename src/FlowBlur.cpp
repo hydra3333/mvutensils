@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <algorithm>
 #include <stdexcept>
+#include <cmath>
 
 #include <VapourSynth4.h>
 
@@ -267,7 +268,7 @@ static void VS_CC flowblurCreate(const VSMap *in, VSMap *out, [[maybe_unused]] v
 
     try {
 
-        if (blur < 0.0f || blur > 200.0f)
+        if (!std::isfinite(blur) || blur < 0.0f || blur > 200.0f)
             throw std::runtime_error("blur must be between 0 and 200");
 
         if (d->prec < 1)

@@ -17,6 +17,8 @@
 // Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA, or visit
 // http://www.gnu.org/copyleft/gpl.html .
 
+#include <cmath>
+
 #include <VapourSynth4.h>
 
 #include "Common.h"
@@ -286,11 +288,11 @@ static void VS_CC flowinterCreate(const VSMap *in, VSMap *out, [[maybe_unused]] 
 
     try {
 
-        if (time < 0.0f || time > 100.0f)
+        if (!std::isfinite(time) || time < 0.0f || time > 100.0f)
             throw std::runtime_error("time must be between 0 and 100%");
 
-        if (d->ml <= 0.0f)
-            throw std::runtime_error("ml must be greater than 0");
+        if (!std::isfinite(d->ml) || d->ml <= 0.0f)
+            throw std::runtime_error("ml must be a finite value greater than 0");
 
         d->ml = 1.0f / d->ml;
 

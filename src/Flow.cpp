@@ -21,6 +21,7 @@
 #include <cstring>
 #include <memory>
 #include <algorithm>
+#include <cmath>
 
 #include <VapourSynth4.h>
 
@@ -191,7 +192,7 @@ static void VS_CC flowCreate(const VSMap *in, VSMap *out, [[maybe_unused]] void 
 
     try {
 
-        if (time < 0.0 || time > 100.0)
+        if (!std::isfinite(time) || time < 0.0 || time > 100.0)
             throw std::runtime_error("time must be between 0 and 100%");
 
         d->time256 = (int)(time * 256.0 / 100.0);

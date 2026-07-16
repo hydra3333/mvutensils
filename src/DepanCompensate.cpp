@@ -241,8 +241,8 @@ static void VS_CC depanCompensateCreate(const VSMap *in, VSMap *out, [[maybe_unu
         if (d->subpixel < 0 || d->subpixel > 2)
             throw std::runtime_error("subpixel must be between 0 and 2 (inclusive)");
 
-        if (d->pixaspect <= 0.0f)
-            throw std::runtime_error("pixaspect must be greater than 0");
+        if (!std::isfinite(d->pixaspect) || d->pixaspect <= 0.0f)
+            throw std::runtime_error("pixaspect must be a finite value greater than 0");
 
         if (d->mirror < 0 || d->mirror > 15)
             throw std::runtime_error("mirror must be between 0 and 15 (inclusive)");
@@ -268,6 +268,9 @@ static void VS_CC depanCompensateCreate(const VSMap *in, VSMap *out, [[maybe_unu
         if (d->vi->numFrames > vsapi->getVideoInfo(d->data)->numFrames)
             throw std::runtime_error("data must have at least as many frames as clip");
 
+
+        if (!std::isfinite(d->offset))
+            throw std::runtime_error("offset must be a finite number");
 
         if (d->offset > 0.0f)
             d->intoffset = (int)ceilf(d->offset);

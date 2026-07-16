@@ -17,6 +17,8 @@
 // Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA, or visit
 // http://www.gnu.org/copyleft/gpl.html .
 
+#include <cmath>
+
 #include <VapourSynth4.h>
 #include <VSHelper4.h>
 
@@ -340,8 +342,8 @@ static void VS_CC flowfpsCreate(const VSMap *in, VSMap *out, [[maybe_unused]] vo
     d->vi = *d->oldvi;
 
     try {
-        if (d->ml <= 0.0)
-            throw std::runtime_error("ml must be greater than 0");
+        if (!std::isfinite(d->ml) || d->ml <= 0.0)
+            throw std::runtime_error("ml must be a finite value greater than 0");
 
         d->ml = 1.0f / d->ml;
 
