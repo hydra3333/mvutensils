@@ -80,7 +80,9 @@ struct SADWrapperU16_AVX512 {
 // or(subs_epu16(a,b),subs_epu16(b,a)) is UNSIGNED [0,65535] which overflows the signed word vpdpwssd
 // wants, so XOR 0x8000 maps it to signed [-32768,32767] (== ad-32768); vpdpwssd(.,+1) then fuses
 // widen+pair-sum+accumulate into int32, and the compile-time constant 32768*W*H is added back at the
-// end. ~1.25-1.5x over the plain kernel for widths 8..64 (see bench_degrain/sad16_vnni*_bench.cpp).
+// end. The or+xor pair is written as one explicit vpternlog (imm 0x56 = (A|B)^C) instead of relying on
+// the compiler to spot the fusion. ~1.25-1.5x over the plain kernel for widths 8..64 (see
+// bench_degrain/sad16_vnni*_bench.cpp).
 // 4 row-interleaved accumulators hide vpdpwssd's ~5c latency. Requires H % 4 == 0 (all registered).
 // clang-cl's /arch:AVX512 is only x86-64-v4 (no VNNI), so the kernel opts into VNNI with a function
 // target attribute; MSVC's /arch:AVX512 is a broad umbrella that already exposes the VNNI intrinsics
@@ -118,13 +120,13 @@ static unsigned int sad_u16_avx512_vnni(const uint8_t *pSrc8, intptr_t nSrcPitch
                            *r2 = (const uint16_t *)(pRef8 + 2 * nRefPitch), *r3 = (const uint16_t *)(pRef8 + 3 * nRefPitch);
             for (unsigned x = 0; x < W; x += 32) {
                 __m512i A0 = _mm512_loadu_si512(s0 + x), B0 = _mm512_loadu_si512(r0 + x);
-                a0 = _mm512_dpwssd_epi32(a0, _mm512_xor_si512(_mm512_or_si512(_mm512_subs_epu16(A0, B0), _mm512_subs_epu16(B0, A0)), bias), ones);
+                a0 = _mm512_dpwssd_epi32(a0, _mm512_ternarylogic_epi64(_mm512_subs_epu16(A0, B0), _mm512_subs_epu16(B0, A0), bias, 0x56), ones);
                 __m512i A1 = _mm512_loadu_si512(s1 + x), B1 = _mm512_loadu_si512(r1 + x);
-                a1 = _mm512_dpwssd_epi32(a1, _mm512_xor_si512(_mm512_or_si512(_mm512_subs_epu16(A1, B1), _mm512_subs_epu16(B1, A1)), bias), ones);
+                a1 = _mm512_dpwssd_epi32(a1, _mm512_ternarylogic_epi64(_mm512_subs_epu16(A1, B1), _mm512_subs_epu16(B1, A1), bias, 0x56), ones);
                 __m512i A2 = _mm512_loadu_si512(s2 + x), B2 = _mm512_loadu_si512(r2 + x);
-                a2 = _mm512_dpwssd_epi32(a2, _mm512_xor_si512(_mm512_or_si512(_mm512_subs_epu16(A2, B2), _mm512_subs_epu16(B2, A2)), bias), ones);
+                a2 = _mm512_dpwssd_epi32(a2, _mm512_ternarylogic_epi64(_mm512_subs_epu16(A2, B2), _mm512_subs_epu16(B2, A2), bias, 0x56), ones);
                 __m512i A3 = _mm512_loadu_si512(s3 + x), B3 = _mm512_loadu_si512(r3 + x);
-                a3 = _mm512_dpwssd_epi32(a3, _mm512_xor_si512(_mm512_or_si512(_mm512_subs_epu16(A3, B3), _mm512_subs_epu16(B3, A3)), bias), ones);
+                a3 = _mm512_dpwssd_epi32(a3, _mm512_ternarylogic_epi64(_mm512_subs_epu16(A3, B3), _mm512_subs_epu16(B3, A3), bias, 0x56), ones);
             }
             pSrc8 += 4 * nSrcPitch; pRef8 += 4 * nRefPitch;
         }
@@ -136,10 +138,10 @@ static unsigned int sad_u16_avx512_vnni(const uint8_t *pSrc8, intptr_t nSrcPitch
         for (unsigned y = 0; y < H; y += 4) {
             __m512i S0 = _mm512_inserti64x4(_mm512_castsi256_si512(_mm256_loadu_si256((const __m256i *)(pSrc8))), _mm256_loadu_si256((const __m256i *)(pSrc8 + nSrcPitch)), 1);
             __m512i R0 = _mm512_inserti64x4(_mm512_castsi256_si512(_mm256_loadu_si256((const __m256i *)(pRef8))), _mm256_loadu_si256((const __m256i *)(pRef8 + nRefPitch)), 1);
-            a0 = _mm512_dpwssd_epi32(a0, _mm512_xor_si512(_mm512_or_si512(_mm512_subs_epu16(S0, R0), _mm512_subs_epu16(R0, S0)), bias), ones);
+            a0 = _mm512_dpwssd_epi32(a0, _mm512_ternarylogic_epi64(_mm512_subs_epu16(S0, R0), _mm512_subs_epu16(R0, S0), bias, 0x56), ones);
             __m512i S1 = _mm512_inserti64x4(_mm512_castsi256_si512(_mm256_loadu_si256((const __m256i *)(pSrc8 + 2 * nSrcPitch))), _mm256_loadu_si256((const __m256i *)(pSrc8 + 3 * nSrcPitch)), 1);
             __m512i R1 = _mm512_inserti64x4(_mm512_castsi256_si512(_mm256_loadu_si256((const __m256i *)(pRef8 + 2 * nRefPitch))), _mm256_loadu_si256((const __m256i *)(pRef8 + 3 * nRefPitch)), 1);
-            a1 = _mm512_dpwssd_epi32(a1, _mm512_xor_si512(_mm512_or_si512(_mm512_subs_epu16(S1, R1), _mm512_subs_epu16(R1, S1)), bias), ones);
+            a1 = _mm512_dpwssd_epi32(a1, _mm512_ternarylogic_epi64(_mm512_subs_epu16(S1, R1), _mm512_subs_epu16(R1, S1), bias, 0x56), ones);
             pSrc8 += 4 * nSrcPitch; pRef8 += 4 * nRefPitch;
         }
         return (unsigned)((uint32_t)_mm512_reduce_add_epi32(_mm512_add_epi32(a0, a1)) + correction);
@@ -149,10 +151,10 @@ static unsigned int sad_u16_avx512_vnni(const uint8_t *pSrc8, intptr_t nSrcPitch
         for (unsigned y = 0; y < H; y += 4) {
             __m256i S0 = _mm256_inserti128_si256(_mm256_castsi128_si256(_mm_loadu_si128((const __m128i *)(pSrc8))), _mm_loadu_si128((const __m128i *)(pSrc8 + nSrcPitch)), 1);
             __m256i R0 = _mm256_inserti128_si256(_mm256_castsi128_si256(_mm_loadu_si128((const __m128i *)(pRef8))), _mm_loadu_si128((const __m128i *)(pRef8 + nRefPitch)), 1);
-            a0 = _mm256_dpwssd_epi32(a0, _mm256_xor_si256(_mm256_or_si256(_mm256_subs_epu16(S0, R0), _mm256_subs_epu16(R0, S0)), bias), ones);
+            a0 = _mm256_dpwssd_epi32(a0, _mm256_ternarylogic_epi64(_mm256_subs_epu16(S0, R0), _mm256_subs_epu16(R0, S0), bias, 0x56), ones);
             __m256i S1 = _mm256_inserti128_si256(_mm256_castsi128_si256(_mm_loadu_si128((const __m128i *)(pSrc8 + 2 * nSrcPitch))), _mm_loadu_si128((const __m128i *)(pSrc8 + 3 * nSrcPitch)), 1);
             __m256i R1 = _mm256_inserti128_si256(_mm256_castsi128_si256(_mm_loadu_si128((const __m128i *)(pRef8 + 2 * nRefPitch))), _mm_loadu_si128((const __m128i *)(pRef8 + 3 * nRefPitch)), 1);
-            a1 = _mm256_dpwssd_epi32(a1, _mm256_xor_si256(_mm256_or_si256(_mm256_subs_epu16(S1, R1), _mm256_subs_epu16(R1, S1)), bias), ones);
+            a1 = _mm256_dpwssd_epi32(a1, _mm256_ternarylogic_epi64(_mm256_subs_epu16(S1, R1), _mm256_subs_epu16(R1, S1), bias, 0x56), ones);
             pSrc8 += 4 * nSrcPitch; pRef8 += 4 * nRefPitch;
         }
         __m256i acc = _mm256_add_epi32(a0, a1);
