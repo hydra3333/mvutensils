@@ -97,6 +97,8 @@ Changes
 
     * Greatly reduced memory usage
 
+    * The maximum radius was raised from 6 to 25, so Degrain1 through Degrain25 exist and up to 50 vector clips can be passed
+
 * Degrain:
     * A convenience function that deduces the correct DegrainN call from the number of passed vectors, created to combine with AnalyseMany
 

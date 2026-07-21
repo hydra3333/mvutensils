@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <optional>
 #include <algorithm>
 
@@ -9,20 +10,18 @@
 #include "SuperPyramid.h"
 #include "MotionBlockPyramid.h"
 
-enum VectorOrder {
-    Backward1 = 0,
-    Forward1,
-    Backward2,
-    Forward2,
-    Backward3,
-    Forward3,
-    Backward4,
-    Forward4,
-    Backward5,
-    Forward5,
-    Backward6,
-    Forward6
-};
+// Largest temporal radius Degrain supports. Everything radius-dependent derives from this constant --
+// the per-radius dispatch tables, the Degrain1..N registrations and the argument validation -- so
+// raising the cap only means changing this value and paying for the extra template instantiations.
+// The kernels themselves are radius-agnostic: normaliseWeights renormalises to sum(WSrc + WRefs) == 256
+// regardless of radius, which is what keeps Degrain_C8's uint16 pixel accumulator in range.
+inline constexpr int kMaxDegrainRadius = 25;
+
+// normaliseWeights accumulates 256 * userWeight over 2 * radius + 1 terms (plus 1) in an int; the
+// per-weight ceiling enforced in degrainCreate is derived from this and must stay >= 1.
+static_assert(kMaxDegrainRadius >= 1 &&
+    (std::numeric_limits<int>::max() - 1) / (256LL * (kMaxDegrainRadius * 2 + 1)) >= 1,
+    "kMaxDegrainRadius too large: the normaliseWeights int accumulation would overflow");
 
 
 using DenoiseFunction = void (*)(uint8_t *pDst, ptrdiff_t nDstPitch, const uint8_t *pSrc, ptrdiff_t nSrcPitch, const uint8_t **_pRefs, ptrdiff_t nRefPitch, uint16_t WSrc, const uint16_t *WRefs) noexcept;
@@ -116,82 +115,6 @@ static void Degrain_F32(uint8_t *MVU_RESTRICT pDst8, ptrdiff_t nDstPitch, const 
     }
 }
 
-
-#ifdef MVTOOLS_X86
-#include <emmintrin.h>
-void selectDegrainFunctionAVX2(unsigned radius, unsigned width, unsigned height, unsigned bits, DenoiseFunction &degrain) noexcept;
-void selectDegrainFunctionAVX512(unsigned radius, unsigned width, unsigned height, unsigned bits, DenoiseFunction &degrain) noexcept;
-
-template <int radius, int blockWidth, int blockHeight>
-static void Degrain_sse2(uint8_t * MVU_RESTRICT pDst, ptrdiff_t nDstPitch, const uint8_t * MVU_RESTRICT pSrc, ptrdiff_t nSrcPitch, const uint8_t ** MVU_RESTRICT pRefs, ptrdiff_t nRefPitch, uint16_t WSrc, const uint16_t * MVU_RESTRICT WRefs) noexcept {
-    static_assert(blockWidth >= 4, "");
-
-    __m128i zero = _mm_setzero_si128();
-    __m128i wsrc = _mm_set1_epi16(WSrc);
-    __m128i wrefs[12];
-
-    // We intentionally jump by 2 (here and below), as it delineates groups of
-    // backward/forward and ALSO produces testably faster code.
-    for(int i = 0; i < radius * 2; i += 2) {
-        wrefs[i] = _mm_set1_epi16(WRefs[i]);
-        wrefs[i + 1] = _mm_set1_epi16(WRefs[i + 1]);
-    }
-
-    __m128i src, accum, refs[12];
-
-    for (int y = 0; y < blockHeight; y++) {
-        for (int x = 0; x < blockWidth; x += 8) {
-            if (blockWidth == 4) {
-                src = _mm_cvtsi32_si128(*(const int *)pSrc);
-                for(int i = 0; i < radius * 2; i += 2) {
-                    refs[i] = _mm_cvtsi32_si128(*(const int *)pRefs[i]);
-                    refs[i + 1] = _mm_cvtsi32_si128(*(const int *)pRefs[i + 1]);
-                }
-            } else {
-                src = _mm_loadl_epi64((const __m128i *)(pSrc + x));
-                for(int i = 0; i < radius * 2; i += 2) {
-                    refs[i] = _mm_loadl_epi64((const __m128i *)(pRefs[i] + x));
-                    refs[i + 1] = _mm_loadl_epi64((const __m128i *)(pRefs[i + 1] + x));
-                }
-            }
-
-            src = _mm_unpacklo_epi8(src, zero);
-            src = _mm_mullo_epi16(src, wsrc);
-
-            for(int i = 0; i < radius * 2; i += 2) {
-                refs[i] = _mm_unpacklo_epi8(refs[i], zero);
-                refs[i + 1] = _mm_unpacklo_epi8(refs[i + 1], zero);
-
-                refs[i] = _mm_mullo_epi16(refs[i], wrefs[i]);
-                refs[i + 1] = _mm_mullo_epi16(refs[i + 1], wrefs[i + 1]);
-            }
-
-            accum = _mm_set1_epi16(128);
-            accum = _mm_add_epi16(accum, src);
-
-            for(int i = 0; i < radius * 2; i += 2) {
-                accum = _mm_add_epi16(accum, refs[i]);
-                accum = _mm_add_epi16(accum, refs[i + 1]);
-            }
-
-            accum = _mm_srli_epi16(accum, 8);
-            accum = _mm_packus_epi16(accum, zero);
-
-            if (blockWidth == 4)
-                *(int *)pDst = _mm_cvtsi128_si32(accum);
-            else
-                _mm_storel_epi64((__m128i *)(pDst + x), accum);
-        }
-        pDst += nDstPitch;
-        pSrc += nSrcPitch;
-        for(int i = 0; i < radius * 2; i += 2) {
-            pRefs[i] += nRefPitch;
-            pRefs[i + 1] += nRefPitch;
-        }
-    }
-}
-
-#endif // MVTOOLS_X86
 
 
 // LimitChanges clamps each output pixel to [pSrc - nLimit, pSrc + nLimit]. nLimit is

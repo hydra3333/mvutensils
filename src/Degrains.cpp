@@ -23,6 +23,8 @@
 #include <memory>
 #include <cmath>
 #include <limits>
+#include <array>
+#include <utility>
 
 #include <VapourSynth4.h>
 
@@ -349,30 +351,15 @@ static const VSFrame *VS_CC degrainGetFrame(int n, int activationReason, void *i
 
 #define KEY(width, height, bits) (unsigned)(width) << 24 | (height) << 16 | (bits) << 8
 
-// On x86 the 8-bit SSE2 kernel takes the scalar version's place directly in the map (no separate
-// map, no instruction-set key). 16-bit pixels have no SSE2 Degrain kernel so they stay scalar;
-// width-2 (DEGRAIN_C below) has no SSE2 kernel for either bit depth.
-#if defined(MVTOOLS_X86)
 #define DEGRAIN(radius, width, height) \
-    { KEY(width, height, 8), Degrain_sse2<radius, width, height> }, \
-    { KEY(width, height, 16), Degrain_C16<radius, width, height> }, \
-    { KEY(width, height, 32), Degrain_F32<radius, width, height> },
-#else
-#define DEGRAIN(radius, width, height) \
-    { KEY(width, height, 8), Degrain_C8<radius, width, height> }, \
-    { KEY(width, height, 16), Degrain_C16<radius, width, height> }, \
-    { KEY(width, height, 32), Degrain_F32<radius, width, height> },
-#endif
-
-#define DEGRAIN_C(radius, width, height) \
     { KEY(width, height, 8), Degrain_C8<radius, width, height> }, \
     { KEY(width, height, 16), Degrain_C16<radius, width, height> }, \
     { KEY(width, height, 32), Degrain_F32<radius, width, height> },
 
 #define DEGRAIN_LEVEL(radius)\
     {\
-        DEGRAIN_C(radius, 2, 2)\
-        DEGRAIN_C(radius, 2, 4)\
+        DEGRAIN(radius, 2, 2)\
+        DEGRAIN(radius, 2, 4)\
         DEGRAIN(radius, 4, 2)\
         DEGRAIN(radius, 4, 4)\
         DEGRAIN(radius, 4, 8)\
@@ -400,30 +387,27 @@ static const VSFrame *VS_CC degrainGetFrame(int n, int activationReason, void *i
         DEGRAIN(radius, 128, 128)\
     }
 
-static const std::unordered_map<uint32_t, DenoiseFunction> degrain_functions[6] = {
-    DEGRAIN_LEVEL(1),
-    DEGRAIN_LEVEL(2),
-    DEGRAIN_LEVEL(3),
-    DEGRAIN_LEVEL(4),
-    DEGRAIN_LEVEL(5),
-    DEGRAIN_LEVEL(6),
-};
+// One table per radius, generated for 1..kMaxDegrainRadius so the cap lives in a single constant.
+template <int Radius>
+static std::unordered_map<uint32_t, DenoiseFunction> makeDegrainMap() {
+    return DEGRAIN_LEVEL(Radius);
+}
+
+template <int... Is>
+static auto makeDegrainMaps(std::integer_sequence<int, Is...>) {
+    return std::array<std::unordered_map<uint32_t, DenoiseFunction>, sizeof...(Is)>{ makeDegrainMap<Is + 1>()... };
+}
+
+static const auto degrain_functions = makeDegrainMaps(std::make_integer_sequence<int, kMaxDegrainRadius>{});
 
 static DenoiseFunction selectDegrainFunction(unsigned radius, unsigned width, unsigned height, unsigned bits) {
-    DenoiseFunction degrain = degrain_functions[radius - 1].at(KEY(width, height, bits));
+    if (radius < 1 || radius > kMaxDegrainRadius)
+        throw std::out_of_range("degrain radius out of range");
 
-#if defined(MVTOOLS_X86)
-    if (g_cpuinfo & MVU_CPU_AVX2)
-        selectDegrainFunctionAVX2(radius, width, height, bits, degrain);
-    if (g_cpuinfo & MVU_CPU_AVX512_BASE)
-        selectDegrainFunctionAVX512(radius, width, height, bits, degrain); // overrides AVX2 for big blocks (~2x)
-#endif
-
-    return degrain;
+    return degrain_functions[radius - 1].at(KEY(width, height, bits));
 }
 
 #undef DEGRAIN
-#undef DEGRAIN_C
 #undef DEGRAIN_LEVEL
 
 #undef KEY
@@ -657,8 +641,8 @@ static void VS_CC degrainNCreate(const VSMap *in, VSMap *out, [[maybe_unused]] v
 
     numElems /= 2;
 
-    if (numElems < 1 || numElems > 6) {
-        vsapi->mapSetError(out, "Degrain: number of vector pairs must be between 1 and 6");
+    if (numElems < 1 || numElems > kMaxDegrainRadius) {
+        vsapi->mapSetError(out, ("Degrain: number of vector pairs must be between 1 and " + std::to_string(kMaxDegrainRadius)).c_str());
         return;
     }
 
@@ -686,31 +670,17 @@ constexpr const char *degrain_args =
     "weights:int[]:opt;"
     "prefix:data:opt;";
 
+// Registers Degrain1 .. DegrainN for the whole 1..kMaxDegrainRadius range.
+template <int... Is>
+static void registerDegrainRadii(VSPlugin *plugin, const VSPLUGINAPI *vspapi, std::integer_sequence<int, Is...>) noexcept {
+    (vspapi->registerFunction(("Degrain" + std::to_string(Is + 1)).c_str(),
+                 degrain_args,
+                 "clip:vnode;",
+                 degrainCreate<Is + 1>, nullptr, plugin), ...);
+}
+
 void degrainsRegister(VSPlugin *plugin, const VSPLUGINAPI *vspapi) noexcept {
-    vspapi->registerFunction("Degrain1",
-                 degrain_args,
-                 "clip:vnode;",
-                 degrainCreate<1>, nullptr, plugin);
-    vspapi->registerFunction("Degrain2",
-                 degrain_args,
-                 "clip:vnode;",
-                 degrainCreate<2>, nullptr, plugin);
-    vspapi->registerFunction("Degrain3",
-                 degrain_args,
-                 "clip:vnode;",
-                 degrainCreate<3>, nullptr, plugin);
-    vspapi->registerFunction("Degrain4",
-                 degrain_args,
-                 "clip:vnode;",
-                 degrainCreate<4>, nullptr, plugin);
-    vspapi->registerFunction("Degrain5",
-                 degrain_args,
-                 "clip:vnode;",
-                 degrainCreate<5>, nullptr, plugin);
-    vspapi->registerFunction("Degrain6",
-                 degrain_args,
-                 "clip:vnode;",
-                 degrainCreate<6>, nullptr, plugin);
+    registerDegrainRadii(plugin, vspapi, std::make_integer_sequence<int, kMaxDegrainRadius>{});
     vspapi->registerFunction("Degrain",
                  degrain_args,
                  "clip:vnode;",

@@ -23,6 +23,10 @@ and adds full high-bit-depth and float support.
   `prefix` argument to change it, which lets two independent MVUtensils graphs coexist on one clip.
 * Motion vectors are stored as frame properties: `<prefix>AnalysisVectors` (an int array where the
   low 32 bits hold *x* and the high 32 bits hold *y*) and `<prefix>AnalysisSAD` (the per-block SAD).
+* On x86-64 the plugin is built for several instruction-set levels (baseline, AVX2 and znver4) and the
+  matching build is loaded for the running CPU. Most of the SIMD gain comes from that choice — the
+  `Degrain` kernels in particular are plain auto-vectorized C, so their width is whatever the loaded
+  build was compiled for. A few hand-written kernels additionally pick a wider variant at runtime.
 
 ## Porting from MVTools
 
@@ -305,8 +309,8 @@ started from.
 Motion-compensated temporal denoiser. Averages each block with its motion-compensated counterparts
 from `radius` previous and `radius` following frames, weighted by how well they match.
 
-`Degrain` auto-selects the radius from the number of vector clips; `Degrain1`…`Degrain6` are explicit
-variants that take the same arguments.
+`Degrain` auto-selects the radius from the number of vector clips; `Degrain1`…`Degrain25` are explicit
+variants that take the same arguments. The radius may be 1–25, i.e. 2–50 vector clips.
 
 ```py
 core.mvu.Degrain(vnode clip, vnode super, vnode[] vectors[, int[] thsad=[400, 400], int[] planes=[0, 1, 2], float[] limit=[inf, inf], int thscd1=400, float thscd2=51, int[] weights=None, str prefix="MVUtensils"])
@@ -316,11 +320,11 @@ core.mvu.Degrain(vnode clip, vnode super, vnode[] vectors[, int[] thsad=[400, 40
 | --- | --- | --- | --- |
 | clip | 8–16 bit integer or 32 bit float, GRAY/YUV | | Clip to denoise. |
 | super | vnode | (required) | Super clip. |
-| vectors | vnode[] | (required) | Vector clips in `AnalyseMany` order: `[bw1, fw1, bw2, fw2, …]`. Their count selects the radius. |
+| vectors | vnode[] | (required) | Vector clips in `AnalyseMany` order: `[bw1, fw1, bw2, fw2, …]`. Their count selects the radius; an even count of 2–50 clips (radius 1–25). |
 | thsad | int[] | ([400, 400]) | SAD `[luma, chroma]` at which a reference block's weight reaches zero. Higher = stronger denoising. Chroma defaults to the luma value. |
 | planes | int[] | ([0, 1, 2]) | Which planes to process; unprocessed planes are copied. |
 | limit | float[] | ([inf, inf]) | Maximum absolute change per pixel `[luma, chroma]`. Non-finite (`inf`/`nan`) or a value above the format maximum disables limiting. |
-| weights | int[] | (None) | Optional per-frame bias applied on top of the SAD-derived weights, in temporal order `[bw_radius, …, bw_1, centre, fw_1, …, fw_radius]` — exactly `2·radius + 1` non-negative values. Each reference's (and the source's) weight is multiplied by its entry before the weights are normalised, so only the ratios matter — the upper limit (≈645,000 at radius 6, higher at smaller radius) exists purely to keep the internal weight sum inside a 32-bit int and is far beyond any real use. Omitted (or all-equal) leaves the default SAD weighting unchanged. |
+| weights | int[] | (None) | Optional per-frame bias applied on top of the SAD-derived weights, in temporal order `[bw_radius, …, bw_1, centre, fw_1, …, fw_radius]` — exactly `2·radius + 1` non-negative values. Each reference's (and the source's) weight is multiplied by its entry before the weights are normalised, so only the ratios matter — the upper limit (≈2,800,000 at radius 1, falling to ≈164,000 at radius 25) exists purely to keep the internal weight sum inside a 32-bit int and is far beyond any real use. Omitted (or all-equal) leaves the default SAD weighting unchanged. |
 
 > **Porting:** the per-direction `mvbw*/mvfw*` arguments are now the single `vectors` list, the
 > `thsad`/`thsadc` pair became `thsad=[luma, chroma]`, and `limit`/`limitc` became the float

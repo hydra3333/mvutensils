@@ -36,7 +36,6 @@ common_kwargs = {
 
 # Per-ISA hand-written kernels. They are runtime-dispatched, so even a baseline build contains them.
 avx2_sources = files(
-    'src/Degrains_AVX2.cpp',
     'src/Overlap_AVX2.cpp',
     'src/SADFunctions_AVX2.cpp',
     'src/FlowShared_AVX2.cpp',
@@ -44,7 +43,6 @@ avx2_sources = files(
 avx512_sources = files(
     'src/SADFunctions_AVX512.cpp',
     'src/FlowShared_AVX512.cpp',
-    'src/Degrains_AVX512.cpp',
 )
 
 # Float-pixel SAD baseline: built with -ffast-math (the clang/gcc equivalent of MSVC /fp:fast) so the
