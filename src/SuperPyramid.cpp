@@ -914,7 +914,7 @@ FramePyramid::FramePyramid(const VSFrame *srcFrame, int levels, int nBlkSizeX, i
 FramePyramid::FramePyramid(const VSFrame *srcFrame, int levels, int nBlkSizeX, int nBlkSizeY, int nOverlapX, int nOverlapY, int hPad, int vPad, RFilterParam rFilter, int pel, const VSFrame *pelFrame, VSCore *core, const VSAPI *vsapi) {
     SharedInit(srcFrame, levels, nBlkSizeX, nBlkSizeY, nOverlapX, nOverlapY, hPad, vPad, rFilter, pel, core, vsapi);
     if (pel > 1)
-        SetExternalPelPlanes(pelFrame, vsapi);
+        SetExternalPelPlanes(srcFrame, pelFrame, vsapi);
 }
 
 void FramePyramid::LoadFrameData(const VSFrame *srcFrame, int maxLevel, const std::string &prefix) {
@@ -1071,18 +1071,16 @@ void FramePyramid::GeneratePelPlanes(SharpParam sharp, const VSAPI *vsapi) {
     }
 }
 
-void FramePyramid::SetExternalPelPlanes(const VSFrame *pelFrame, const VSAPI *vsapi) {
+void FramePyramid::SetExternalPelPlanes(const VSFrame *srcFrame, const VSFrame *pelFrame, const VSAPI *vsapi) {
     if (nPel != 2 && nPel != 4)
         throw SuperPyramidError("Pel value must be 2 or 4");
 
     assert(pyramidLevels[0].planes[0].storage);
 
-    const VSFrame *storageFrame = pyramidLevels[0].planes[0].storage;
-
     const VSVideoFormat *pelFormat = vsapi->getVideoFrameFormat(pelFrame);
-    const VSVideoFormat *format = vsapi->getVideoFrameFormat(storageFrame);
+    const VSVideoFormat *srcFormat = vsapi->getVideoFrameFormat(srcFrame);
 
-    if (!vsh::isSameVideoFormat(pelFormat, format))
+    if (!vsh::isSameVideoFormat(pelFormat, srcFormat))
         throw SuperPyramidError("Pel frame format does not match source frame format");
 
     if (vsapi->getFrameWidth(pelFrame, 0) != pyramidLevels[0].planes[0].nRealWidth * nPel ||

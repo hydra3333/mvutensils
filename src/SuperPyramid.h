@@ -181,7 +181,7 @@ private:
     void FreeFrames() noexcept;
     void LoadFrameData(const VSFrame *srcFrame, int maxLevel, const std::string &prefix);
     void GeneratePelPlanes(SharpParam sharp, const VSAPI *vsapi);
-    void SetExternalPelPlanes(const VSFrame *pelFrame, const VSAPI *vsapi);
+    void SetExternalPelPlanes(const VSFrame *srcFrame, const VSFrame *pelFrame, const VSAPI *vsapi);
     void SharedInit(const VSFrame *srcFrame, int levels, int nBlkSizeX, int nBlkSizeY, int nOverlapX, int nOverlapY, int hPad, int vPad, RFilterParam rFilter, int pel, VSCore *core, const VSAPI *vsapi);
 public:
     // Constructor to build from source frame with generated subpel frame, does not take ownership of srcFrame
