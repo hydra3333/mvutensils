@@ -1810,9 +1810,6 @@ bool MotionBlockPyramid::IsCompatibleWithAnalysis(const FramePyramid &other) con
     if (nPel != other.nPel)
         return false;
 
-    if (bitsPerSample != other.bitsPerSample)
-        return false;
-
     return true;
 }
 

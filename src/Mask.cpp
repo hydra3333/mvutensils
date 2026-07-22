@@ -176,7 +176,7 @@ static void VS_CC maskCreate(const VSMap *in, VSMap *out, void *userData, VSCore
                 throw std::runtime_error("scval must be between 0 and " + std::to_string(maxVal));
         }
 
-        vectors.ScaleThSCD(d->thscd1, d->thscd2, d->vi.format.bitsPerSample);
+        vectors.ScaleThSCD(d->thscd1, d->thscd2, vectors.bitsPerSample);
 
         d->fMaskNormFactor = 1.0f / ml;
 

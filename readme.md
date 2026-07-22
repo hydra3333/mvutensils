@@ -19,6 +19,13 @@ and adds full high-bit-depth and float support.
 
 * Supported pixel formats are GRAY and YUV at 8–16 bit integer or 32 bit float. The bit depth and
   subsampling are taken from the input/super clip; masks derive their format from the vector clip.
+* A vector clip stores block geometry and per-block SAD, never pixels, so it does **not** have to be
+  analysed at the same bit depth as the clip it is later applied to. Analysing an 8-bit copy and
+  using the result on the 16-bit or float original is a supported way to trade motion precision for
+  analysis speed. Resolution, subsampling, `pel` and the super's padding must still match.
+  SAD-derived arguments (`thsad`, `thscd1`) are interpreted against the depth the vectors were
+  analysed at, so they keep their documented 8-bit 8×8 meaning either way.
+  [Recalculate](#recalculate) is the one exception and still requires equal bit depths.
 * The attached frame properties use the prefix `MVUtensils` by default. Every function accepts a
   `prefix` argument to change it, which lets two independent MVUtensils graphs coexist on one clip.
 * Motion vectors are stored as frame properties: `<prefix>AnalysisVectors` (an int array where the
@@ -120,7 +127,7 @@ and omitted from the per-function tables below.
 
 | Parameter | Type | Options (Default) | Description |
 | --- | --- | --- | --- |
-| thscd1 | int | (400) | Scene-change SAD threshold. A block whose SAD exceeds this is considered "changed". The value is defined for an 8×8 luma block at 8-bit and is scaled internally to the actual block size, chroma usage and bit depth. |
+| thscd1 | int | (400) | Scene-change SAD threshold. A block whose SAD exceeds this is considered "changed". The value is defined for an 8×8 luma block at 8-bit and is scaled internally to the actual block size, chroma usage and the bit depth the vectors were analysed at. |
 | thscd2 | float | 0–100 (51) | Percentage of blocks that must be "changed" (SAD above `thscd1`) for the whole frame to be treated as a scene change. 0 = any single changed block triggers it; 100 = never. On a scene change the consumer leaves the frame unprocessed (passes the source through). |
 | prefix | str | ("MVUtensils") | Prefix of the frame properties read/written by this function. Must match between the producer and consumer of a vector/super clip. |
 
@@ -279,7 +286,7 @@ out = core.mvu.Degrain(clip, super, vectors)
 
 | Parameter | Type | Options (Default) | Description |
 | --- | --- | --- | --- |
-| super | vnode | (required) | Super clip. Only one level is needed. |
+| super | vnode | (required) | Super clip. Only one level is needed. Unlike the filters that merely consume vectors, its bit depth must equal the one the vectors were analysed at — see [below](#recalculate-and-bit-depth). |
 | vectors | vnode[] | (required) | Vector clip(s) to refine — a single clip or a whole list (e.g. an `AnalyseMany` set). The recalculated clips are returned as a list in the same order. |
 | thsad | int | (200) | Blocks whose SAD is below this keep their vector; worse blocks are re-searched. |
 | smooth | bint | (True) | Interpolate the new (finer) vector field from neighbours (True) or take the nearest old vector (False). `smooth=False` roughly matches the old `divide=1` behaviour, `smooth=True` ≈ `divide=2`. |
@@ -303,6 +310,28 @@ started from.
 > raise an error if the chosen `blksize`/`overlap` can't cover the whole frame (unlike `Super`, which
 > pads). Halving `blksize`+`overlap` and reusing the existing super usually works, unusual splits may
 > need a new super clip.
+
+### Recalculate and bit depth
+
+Every other filter that takes a vector clip only reads it, so the vectors may come from an analysis at
+a different bit depth (see [Notes](#notes)). `Recalculate` is different because it *writes* vectors:
+it keeps the blocks whose SAD is already below `thsad` and replaces the rest, and the replacements get
+SADs measured against the super it was handed. Allowing a mismatch would therefore produce a single
+vector clip whose blocks carry SADs on two different scales, silently breaking every `thsad`/`thscd1`
+comparison downstream. So `Recalculate` requires the super and the vectors to share a bit depth.
+
+If you want to analyse cheaply at 8-bit and refine, do both steps at 8-bit and apply the final vectors
+to the deeper clip:
+
+```py
+clip8 = core.resize.Bilinear(clip, format=vs.YUV420P8)
+super8 = core.mvu.Super(clip8, blksize=8, overlap=4, pel=2)
+vectors = core.mvu.AnalyseMany(super8, radius=3)
+vectors = core.mvu.Recalculate(super8, vectors, blksize=4, overlap=2)
+
+super16 = core.mvu.Super(clip, blksize=8, overlap=4, pel=2)   # clip is 16-bit
+out = core.mvu.Degrain(clip, super16, vectors)                # vectors reused across depths
+```
 
 ## Degrain
 

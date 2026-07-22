@@ -540,8 +540,8 @@ static void VS_CC degrainCreate(const VSMap *in, VSMap *out, [[maybe_unused]] vo
         if (!super.IsCompatibleWithSource(d->vi))
             throw std::runtime_error("super clip is not compatible with the source clip");
 
-        vectors[0]->ScaleThSCD(d->nSCD1, d->nSCD2, d->vi->format.bitsPerSample);
-        double thscdScale = vectors[0]->GetThSCDScaleFactor(d->vi->format.bitsPerSample);
+        vectors[0]->ScaleThSCD(d->nSCD1, d->nSCD2, vectors[0]->bitsPerSample);
+        double thscdScale = vectors[0]->GetThSCDScaleFactor(vectors[0]->bitsPerSample);
 
         d->thSAD[0] = static_cast<int64_t>(d->thSAD[0] * thscdScale + .5);
         d->thSAD[1] = static_cast<int64_t>(d->thSAD[1] * thscdScale + .5);

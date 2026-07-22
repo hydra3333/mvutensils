@@ -363,7 +363,7 @@ static void VS_CC flowfpsCreate(const VSMap *in, VSMap *out, [[maybe_unused]] vo
         MotionBlockPyramid vectorsFw(d->mvfw, d->prefix, vsapi);
         MotionBlockPyramid vectorsBw(d->mvbw, d->prefix, vsapi);
 
-        vectorsFw.ScaleThSCD(d->thscd1, d->thscd2, d->vi.format.bitsPerSample);
+        vectorsFw.ScaleThSCD(d->thscd1, d->thscd2, vectorsFw.bitsPerSample);
 
         d->deltaFrame = vectorsFw.nDeltaFrame;
 

@@ -393,7 +393,7 @@ static void VS_CC depanAnalyseCreate(const VSMap *in, VSMap *out, [[maybe_unused
             }
         }
 
-        vectors.ScaleThSCD(d->thscd1, d->thscd2, d->vi->format.bitsPerSample);
+        vectors.ScaleThSCD(d->thscd1, d->thscd2, vectors.bitsPerSample);
 
         if (abs(vectors.nDeltaFrame) != 1)
             throw std::runtime_error("vectors clip must be created with delta=1 or -1");
