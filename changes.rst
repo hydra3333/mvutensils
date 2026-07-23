@@ -95,6 +95,8 @@ Changes
 
     * The thsad and thsadc was combined into a single argument thsad=[luma, chroma] where chroma defaults to luma if not specified
 
+    * Added thsad2 from other forks
+
     * Greatly reduced memory usage
 
     * The maximum radius was raised from 6 to 25, so Degrain1 through Degrain25 exist and up to 50 vector clips can be passed

@@ -342,7 +342,7 @@ from `radius` previous and `radius` following frames, weighted by how well they 
 variants that take the same arguments. The radius may be 1–25, i.e. 2–50 vector clips.
 
 ```py
-core.mvu.Degrain(vnode clip, vnode super, vnode[] vectors[, int[] thsad=[400, 400], int[] planes=[0, 1, 2], float[] limit=[inf, inf], int thscd1=400, float thscd2=51, int[] weights=None, str prefix="MVUtensils"])
+core.mvu.Degrain(vnode clip, vnode super, vnode[] vectors[, int[] thsad=[400, 400], int[] thsad2=thsad, int[] planes=[0, 1, 2], float[] limit=[inf, inf], int thscd1=400, float thscd2=51, int[] weights=None, str prefix="MVUtensils"])
 ```
 
 | Parameter | Type | Options (Default) | Description |
@@ -350,14 +350,16 @@ core.mvu.Degrain(vnode clip, vnode super, vnode[] vectors[, int[] thsad=[400, 40
 | clip | 8–16 bit integer or 32 bit float, GRAY/YUV | | Clip to denoise. |
 | super | vnode | (required) | Super clip. |
 | vectors | vnode[] | (required) | Vector clips in `AnalyseMany` order: `[bw1, fw1, bw2, fw2, …]`. Their count selects the radius; an even count of 2–50 clips (radius 1–25). |
-| thsad | int[] | ([400, 400]) | SAD `[luma, chroma]` at which a reference block's weight reaches zero. Higher = stronger denoising. Chroma defaults to the luma value. |
+| thsad | int[] | ([400, 400]) | SAD `[luma, chroma]` at which a reference block's weight reaches zero. Higher = stronger denoising. Chroma defaults to the luma value. Applies to the **nearest** references (temporal distance 1); more distant references interpolate towards `thsad2`. |
+| thsad2 | int[] | (= `thsad`) | SAD `[luma, chroma]` for the **furthest** references (temporal distance `radius`). Each reference at distance `d` in `1…radius` uses a raised-cosine interpolation between `thsad` (at `d=1`) and `thsad2` (at `d=radius`). Setting `thsad2` below `thsad` keeps good compensation for low-SAD blocks at large radii while cutting the blur the far frames would otherwise add. Defaults to `thsad` (a flat threshold, the classic behaviour); has no effect at radius 1, which has no distant reference. |
 | planes | int[] | ([0, 1, 2]) | Which planes to process; unprocessed planes are copied. |
 | limit | float[] | ([inf, inf]) | Maximum absolute change per pixel `[luma, chroma]`. Non-finite (`inf`/`nan`) or a value above the format maximum disables limiting. |
 | weights | int[] | (None) | Optional per-frame bias applied on top of the SAD-derived weights, in temporal order `[bw_radius, …, bw_1, centre, fw_1, …, fw_radius]` — exactly `2·radius + 1` non-negative values. Each reference's (and the source's) weight is multiplied by its entry before the weights are normalised, so only the ratios matter — the upper limit (≈2,800,000 at radius 1, falling to ≈164,000 at radius 25) exists purely to keep the internal weight sum inside a 32-bit int and is far beyond any real use. Omitted (or all-equal) leaves the default SAD weighting unchanged. |
 
 > **Porting:** the per-direction `mvbw*/mvfw*` arguments are now the single `vectors` list, the
-> `thsad`/`thsadc` pair became `thsad=[luma, chroma]`, and `limit`/`limitc` became the float
-> `limit=[luma, chroma]` (defaulting to no limit instead of 255).
+> `thsad`/`thsadc` pair became `thsad=[luma, chroma]`, the `thsad2`/`thsadc2` pair became
+> `thsad2=[luma, chroma]`, and `limit`/`limitc` became the float `limit=[luma, chroma]` (defaulting
+> to no limit instead of 255). As in MDegrainN, `thsad2` defaults to `thsad`.
 
 ```py
 # MVTools:    core.mv.Degrain2(clip, super, mvbw1, mvfw1, mvbw2, mvfw2, thsad=400, thsadc=300)

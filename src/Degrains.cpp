@@ -34,6 +34,17 @@
 #include "CPU.h"
 
 
+static inline int64_t interpolateThSAD(int64_t thsad, int64_t thsad2, int d, int tr) noexcept {
+    if (d <= 1 || tr <= 1)
+        return thsad;
+
+    constexpr double kPi = 3.14159265358979323846;
+    const double x = (d - 1) * kPi / (tr - 1);
+    const double lerp = (1.0 - std::cos(x)) * 0.5; // 0 at d==1, 1 at d==tr
+    return static_cast<int64_t>(std::floor(thsad + lerp * static_cast<double>(thsad2 - thsad) + 0.5));
+}
+
+
 template<int radius>
 struct DegrainData {
     VSNode *node = nullptr;
@@ -43,7 +54,7 @@ struct DegrainData {
 
     const VSVideoInfo *vi = nullptr;
 
-    int64_t thSAD[3];
+    int64_t thSAD[radius * 2][3];
     int nLimit[3];
     float fLimit[3];
     bool needsLimit[3];
@@ -237,7 +248,7 @@ static const VSFrame *VS_CC degrainGetFrame(int n, int activationReason, void *i
                             uint16_t WSrc, WRefs[radius * 2];
 
                             for (int r = 0; r < radius * 2; r++)
-                                useBlock<PixelType>(pointers[r], WRefs[r], isUsable[r], fgops[r], i, pPlanes[r], pSrcCur, xx, nLogPel, plane, xSubUV, ySubUV, thSAD);
+                                useBlock<PixelType>(pointers[r], WRefs[r], isUsable[r], fgops[r], i, pPlanes[r], pSrcCur, xx, nLogPel, plane, xSubUV, ySubUV, thSAD[r]);
 
                             normaliseWeights<radius>(WSrc, WRefs, d->userWeights);
 
@@ -286,12 +297,11 @@ static const VSFrame *VS_CC degrainGetFrame(int n, int activationReason, void *i
 
                             int i = by * nBlkX + bx;
 
-                            const uint8_t *pointers[radius * 2]; // Moved by the degrain function.
-
+                            const uint8_t *pointers[radius * 2];
                             uint16_t WSrc, WRefs[radius * 2];
 
                             for (int r = 0; r < radius * 2; r++)
-                                useBlock<PixelType>(pointers[r], WRefs[r], isUsable[r], fgops[r], i, pPlanes[r], pSrcCur, xx, nLogPel, plane, xSubUV, ySubUV, thSAD);
+                                useBlock<PixelType>(pointers[r], WRefs[r], isUsable[r], fgops[r], i, pPlanes[r], pSrcCur, xx, nLogPel, plane, xSubUV, ySubUV, thSAD[r]);
 
                             normaliseWeights<radius>(WSrc, WRefs, d->userWeights);
 
@@ -456,9 +466,6 @@ static void VS_CC degrainCreate(const VSMap *in, VSMap *out, [[maybe_unused]] vo
 
     int err;
 
-    GetHVPairArgument(d->thSAD[0], d->thSAD[1], "thsad", 400, 400, in, vsapi);
-    d->thSAD[2] = d->thSAD[1];
-
     d->nSCD1 = vsapi->mapGetInt(in, "thscd1", 0, &err);
     if (err)
         d->nSCD1 = MV_DEFAULT_SCD1;
@@ -540,20 +547,32 @@ static void VS_CC degrainCreate(const VSMap *in, VSMap *out, [[maybe_unused]] vo
         if (!super.IsCompatibleWithSource(d->vi))
             throw std::runtime_error("super clip is not compatible with the source clip");
 
+        int64_t thsadRaw[3], thsad2Raw[3];
+        GetHVPairArgument(thsadRaw[0], thsadRaw[1], "thsad", 400, 400, in, vsapi);
+        thsadRaw[2] = thsadRaw[1];
+        GetHVPairArgument(thsad2Raw[0], thsad2Raw[1], "thsad2", thsadRaw[0], thsadRaw[1], in, vsapi);
+        thsad2Raw[2] = thsad2Raw[1];
+
         vectors[0]->ScaleThSCD(d->nSCD1, d->nSCD2, vectors[0]->bitsPerSample);
         double thscdScale = vectors[0]->GetThSCDScaleFactor(vectors[0]->bitsPerSample);
 
-        d->thSAD[0] = static_cast<int64_t>(d->thSAD[0] * thscdScale + .5);
-        d->thSAD[1] = static_cast<int64_t>(d->thSAD[1] * thscdScale + .5);
-        d->thSAD[2] = d->thSAD[1];
-
-        if (d->thSAD[0] >= std::numeric_limits<int>::max() || d->thSAD[1] >= std::numeric_limits<int>::max()) {
-            int64_t maximum = static_cast<int64_t>((std::numeric_limits<int>::max() - 1) / thscdScale);
-
-            bool c = d->thSAD[0] < std::numeric_limits<int>::max();
-
-            throw std::runtime_error("with this block size and video format, thsad" + std::string(c ? "c" : "") + " must not exceed " + std::to_string(maximum) + " or some calculations would overflow");
+        int64_t thsadScaled[3], thsad2Scaled[3];
+        for (int p = 0; p < 3; p++) {
+            thsadScaled[p] = static_cast<int64_t>(thsadRaw[p] * thscdScale + .5);
+            thsad2Scaled[p] = static_cast<int64_t>(thsad2Raw[p] * thscdScale + .5);
         }
+
+        for (int p = 0; p < 2; p++) {
+            if (thsadScaled[p] >= std::numeric_limits<int>::max() || thsad2Scaled[p] >= std::numeric_limits<int>::max()) {
+                int64_t maximum = static_cast<int64_t>((std::numeric_limits<int>::max() - 1) / thscdScale);
+                std::string which = (p == 1) ? "thsad/thsad2 chroma values" : "thsad/thsad2 luma values";
+                throw std::runtime_error("with this block size and video format, the " + which + " must not exceed " + std::to_string(maximum) + " or some calculations would overflow");
+            }
+        }
+
+        for (int r = 0; r < radius * 2; r++)
+            for (int p = 0; p < 3; p++)
+                d->thSAD[r][p] = interpolateThSAD(thsadScaled[p], thsad2Scaled[p], r / 2 + 1, radius);
 
         GetHVPairArgument(d->fLimit[0], d->fLimit[1], "limit", std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(), in, vsapi);
         d->fLimit[2] = d->fLimit[1];
@@ -663,6 +682,7 @@ constexpr const char *degrain_args =
     "super:vnode;"
     "vectors:vnode[];"
     "thsad:int[]:opt;"
+    "thsad2:int[]:opt;"
     "planes:int[]:opt;"
     "limit:float[]:opt;"
     "thscd1:int:opt;"
