@@ -195,7 +195,7 @@ static const VSFrame *VS_CC degrainGetFrame(int n, int activationReason, void *i
             const int *nBlkSizeX = d->nBlkSizeX;
             const int *nBlkSizeY = d->nBlkSizeY;
             const int *nWidth_B = d->nWidth_B;
-            const int64_t *thSAD = d->thSAD;
+            const auto *thSAD = d->thSAD;
 
             OverlapWindows *OverWins[3] = { &d->OverWins[0], &d->OverWins[1], &d->OverWins[2] };
             MvuAlignedPtr<uint8_t> DstTempAlloc(nullptr, mvu_aligned_free);
