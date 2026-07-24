@@ -165,7 +165,12 @@ static const VSFrame *VS_CC degrainGetFrame(int n, int activationReason, void *i
                 isUsable[r] = fgops[r]->IsUsable(d->nSCD1, d->nSCD2);
 
                 if (isUsable[r]) {
-                    int offset = fgops[r]->nDeltaFrame;
+                    if (fgops[r]->nDeltaFrame != d->deltaFrame[r])
+                        throw std::runtime_error("vector clip " + std::to_string(r) + " reports delta " + std::to_string(fgops[r]->nDeltaFrame) +
+                            " at frame " + std::to_string(n) + " but was created with delta " + std::to_string(d->deltaFrame[r]) +
+                            "; the delta must be constant for the whole clip");
+
+                    int offset = d->deltaFrame[r];
                     if (n + offset >= 0 && n + offset < d->vi->numFrames)
                         pRefGOF[r].emplace(vsapi->getFrameFilter(n + offset, d->super, frameCtx), 1, d->prefix, vsapi);
                     else
