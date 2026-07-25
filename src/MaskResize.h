@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <vector>
 #include <memory>
-#include <tuple>
+#include <array>
 #include <utility>
 #include "Common.h"
 
@@ -62,7 +62,7 @@ private:
 
     template <size_t... Is>
     static auto GetTileBuffersImpl(std::index_sequence<Is...>) {
-        return std::make_tuple(((void)Is, GetTileBuffer())...);
+        return std::array<MvuAlignedPtr<uint16_t>, sizeof...(Is)>{ ((void)Is, GetTileBuffer())... };
     }
 
     static const mvuzimgxx::zimage_buffer_const MakeSrcBuffer(const void *data, ptrdiff_t stride = 0) {

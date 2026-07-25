@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 #include <numbers>
 #include <string>
 
@@ -137,7 +136,7 @@ void sumtransform(const transform *ta, const transform *tb, transform *tba) {
 
     temp.dyy = tb->dyx * ta->dxy + tb->dyy * ta->dyy;
 
-    memcpy(tba, &temp, sizeof(temp));
+    *tba = temp;
 }
 
 
