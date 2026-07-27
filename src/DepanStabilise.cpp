@@ -433,6 +433,15 @@ static void InertialLimit(DepanStabiliseData *d, float *dxdif, float *dydif, flo
     } else if (fabsf(*dxdif) > fabsf(dxmax)) {
         if (dxmax >= 0) {
             *dxdif = *dxdif >= 0 ? sqrtf(*dxdif * dxmax) : -sqrtf(-*dxdif * dxmax); // soft limit v.1.8.2
+            // The "soft limit" is a geometric mean, not a clamp: it only halves the exponent, so a
+            // diverged smoother (see WarnIfDiverged) still gets through at ~1e16. Second pass plus a
+            // hard bound, ported from pinterf/mvtools DePan (its ADD_SAFETY block). Note that fork
+            // writes `*dxdif >= 0 ? dxmax : dxmax` on the final line, which flips the sign of large
+            // negative corrections; the negative branch is -dxmax here.
+            if (fabsf(*dxdif) > fabsf(dxmax))
+                *dxdif = *dxdif >= 0 ? sqrtf(*dxdif * dxmax) : -sqrtf(-*dxdif * dxmax);
+            if (fabsf(*dxdif) > fabsf(dxmax * 1.5f))
+                *dxdif = *dxdif >= 0 ? dxmax : -dxmax;
         } else {
             *dxdif = 0;
             *dydif = 0;
@@ -451,6 +460,11 @@ static void InertialLimit(DepanStabiliseData *d, float *dxdif, float *dydif, flo
     } else if (fabsf(*dydif) > fabsf(dymax)) {
         if (dymax >= 0) {
             *dydif = *dydif >= 0 ? sqrtf(*dydif * dymax) : -sqrtf(-*dydif * dymax); // soft limit v.1.8.2
+            // see the dxdif branch above
+            if (fabsf(*dydif) > fabsf(dymax))
+                *dydif = *dydif >= 0 ? sqrtf(*dydif * dymax) : -sqrtf(-*dydif * dymax);
+            if (fabsf(*dydif) > fabsf(dymax * 1.5f))
+                *dydif = *dydif >= 0 ? dymax : -dymax;
         } else {
             *dxdif = 0;
             *dydif = 0;
@@ -739,7 +753,15 @@ static void attachInfo(VSFrame *dst, int nbase, int ndest, float dxdif, float dy
 static const VSFrame *VS_CC depanStabiliseGetFrame0(int ndest, int activationReason, void *instanceData, [[maybe_unused]] void **frameData, VSFrameContext *frameCtx, VSCore *core, const VSAPI *vsapi) noexcept {
     DepanStabiliseData *d = reinterpret_cast<DepanStabiliseData *>(instanceData);
 
-    int nbase = (int)(ndest - 10 * d->fps / d->cutoff);
+    // How far back the "almost full stabilisation" window reaches. A small cutoff makes this
+    // enormous (fps=50, cutoff=0.5 gives 1000 frames = 20 seconds), which is both slow and gives the
+    // inertial recurrence a very long run in which to go unstable. Capped at 5 seconds, ported from
+    // pinterf/mvtools DePan. Also keeps the float in int range for the cast below.
+    float framesback = 10 * d->fps / d->cutoff;
+    if (!(framesback < d->fps * 5.0f)) // NaN-safe: also catches non-finite from a tiny cutoff
+        framesback = d->fps * 5.0f;
+
+    int nbase = (int)(ndest - framesback);
     if (nbase < 0)
         nbase = 0;
 
