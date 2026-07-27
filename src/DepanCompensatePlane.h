@@ -24,6 +24,32 @@
 // indexing to avoid out-of-bounds reads.
 
 
+// The translation reaching these kernels can be arbitrarily large. DepanStabilise's inertial
+// smoother is only checked for finiteness, and InertialLimit's "soft limit" is a geometric mean
+// (sqrt(dxdif * dxmax)) which does not bound magnitude -- a dxc of -2.5e16 has been observed in a
+// crash dump. (int)floorf() of such a value yields INT_MIN, and the translation-only fast paths
+// derive their loop spans as `1 - inttr0`, `row_size - 2 - inttr0` and `-inttr0`, all of which then
+// overflow (signed overflow is UB, so the compiler is free to assume it cannot happen). The spans
+// stop bounding the loop and it reads ~2GB outside the plane.
+//
+// Clamping the shift to one frame's worth keeps every float->int cast in range. Any shift at or
+// past this limit already lands entirely outside the plane, so it produces the same border/mirror
+// output it did before -- output for sane transforms is bit-identical.
+static inline float ClampPlaneShift(float v, float lim) noexcept {
+    if (std::isnan(v)) // std::clamp would pass NaN straight through
+        return 0.0f;
+    return std::clamp(v, -lim, lim);
+}
+
+static inline transform ClampTransformShift(const transform &tr, int row_size, int height) noexcept {
+    const float lim = (float)(row_size + height + 64);
+    transform t = tr;
+    t.dxc = ClampPlaneShift(t.dxc, lim);
+    t.dyc = ClampPlaneShift(t.dyc, lim);
+    return t;
+}
+
+
 //****************************************************************************
 // move plane of nextp frame to dstp for motion compensation by trc, trm with NEAREST pixels
 //
@@ -44,6 +70,10 @@ static void compensate_plane_nearest(uint8_t * MVU_RESTRICT dstp8, const uint8_t
     PixelType *dstp = (PixelType *)dstp8;
 
     pitch /= sizeof(PixelType);
+
+    // Keep every float->int cast below in range; see ClampTransformShift.
+    const transform trClamped = ClampTransformShift(*tr, row_size, height);
+    tr = &trClamped;
 
     // for mirror
 
@@ -240,6 +270,10 @@ static void compensate_plane_bilinear(uint8_t * MVU_RESTRICT dstp8, const uint8_
     PixelType *dstp = (PixelType *)dstp8;
 
     pitch /= sizeof(PixelType);
+
+    // Keep every float->int cast below in range; see ClampTransformShift.
+    const transform trClamped = ClampTransformShift(*tr, row_size, height);
+    tr = &trClamped;
 
     // for mirror
     bool mtop = (mirror & MIRROR_TOP) != 0;
@@ -552,6 +586,10 @@ static void compensate_plane_bicubic(uint8_t * MVU_RESTRICT dstp8, const uint8_t
     PixelType *dstp = (PixelType *)dstp8;
 
     pitch /= sizeof(PixelType);
+
+    // Keep every float->int cast below in range; see ClampTransformShift.
+    const transform trClamped = ClampTransformShift(*tr, row_size, height);
+    tr = &trClamped;
 
     // for mirror
     bool mtop = (mirror & MIRROR_TOP) != 0;

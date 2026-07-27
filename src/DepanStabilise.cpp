@@ -1,4 +1,6 @@
 #include <algorithm>
+#include <atomic>
+#include <cstdio>
 #include <cmath>
 #include <cstdint>
 #include <memory>
@@ -67,6 +69,7 @@ struct DepanStabiliseData {
     float ycenter;
 
     std::mutex motion_mutex;
+    std::atomic_flag warned = ATOMIC_FLAG_INIT; // WarnIfDiverged fires at most once per instance
 
     const VSAPI *vsapi;
 
@@ -77,6 +80,35 @@ struct DepanStabiliseData {
         vsapi->freeNode(data);
     }
 };
+
+
+// The inertial smoother is only conditionally stable. Its feedback is scaled by
+// nonlinfactor = 5/dxmax times the tracking error, so setting dxmax/dymax far below the clip's
+// actual motion makes the correction grow faster than the error and the recurrence runs away --
+// measured going from 4e8 to 1.6e32 in a single frame. InertialLimit does not catch it: its "soft
+// limit" sqrtf(dxdif*dxmax) is a geometric mean, which only halves the exponent (1e32 -> 1e16), and
+// its only hard guard is the isfinite() check, which fires just when the blowup happens to reach
+// infinity rather than a merely astronomical finite value.
+//
+// The compensate kernels now clamp the shift so this can no longer read outside the plane, but the
+// frames are still wrong, so say so once rather than silently emitting broken output. Static clips
+// never trigger this (the error stays zero); the threshold is content dependent, roughly governed by
+// motion/dxmax rather than dxmax alone.
+static void WarnIfDiverged(DepanStabiliseData *d, const transform &tr, int ndest, VSCore *core, const VSAPI *vsapi) {
+    const float sane = (float)(d->vi->width + d->vi->height) * 8.0f;
+    if (std::isfinite(tr.dxc) && std::isfinite(tr.dyc) && fabsf(tr.dxc) <= sane && fabsf(tr.dyc) <= sane)
+        return;
+    if (d->warned.test_and_set(std::memory_order_relaxed)) // once per filter instance
+        return;
+
+    char msg[320];
+    snprintf(msg, sizeof(msg),
+        "DepanStabilise: motion smoothing diverged at frame %d (dx=%.4g, dy=%.4g for a %dx%d frame). "
+        "dxmax/dymax are likely far below the clip's actual motion; try larger values. "
+        "Affected frames are stabilised incorrectly.",
+        ndest, (double)tr.dxc, (double)tr.dyc, d->vi->width, d->vi->height);
+    vsapi->logMessage(mtWarning, msg, core);
+}
 
 
 static void Inertial(DepanStabiliseData *d, transform *trcumul, transform *trsmoothed, float *azoom, float *azoomsmoothed, const int nbase, const int ndest, transform *ptrdif) {
@@ -808,6 +840,8 @@ static const VSFrame *VS_CC depanStabiliseGetFrame0(int ndest, int activationRea
             }
 
             // ---------------------------------------------------------------------------
+            WarnIfDiverged(d, trdif, ndest, core, vsapi);
+
             src = vsapi->getFrameFilter(ndest, d->clip, frameCtx);
             dst = vsapi->newVideoFrame(&d->vi->format, d->vi->width, d->vi->height, src, core);
 
@@ -989,6 +1023,8 @@ static const VSFrame *VS_CC depanStabiliseGetFrame1(int ndest, int activationRea
 
 
             // ---------------------------------------------------------------------------
+            WarnIfDiverged(d, trdif, ndest, core, vsapi);
+
             src = vsapi->getFrameFilter(ndest, d->clip, frameCtx);
             dst = vsapi->newVideoFrame(&d->vi->format, d->vi->width, d->vi->height, src, core);
 
